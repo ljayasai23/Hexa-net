@@ -1,6 +1,6 @@
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'next/router';
-import { useEffect } from 'react';
+// We REMOVED useEffect
 import LoadingSpinner from './LoadingSpinner';
 
 const LogoutButton = () => {
@@ -17,21 +17,16 @@ const LogoutButton = () => {
 
 const Layout = ({ children }) => {
   const { user, isAuthenticated, loading } = useAuth();
-  const router = useRouter();
-
-  // Replace the old useEffect with this one in your Layout.js file
-
-useEffect(() => {
-  const publicPaths = ['/', '/login', '/register'];
-  if (!loading && !isAuthenticated && !publicPaths.includes(router.pathname)) {
-    router.push('/login');
-  }
-}, [isAuthenticated, loading, router]);
+  
+  // The problematic useEffect hook has been COMPLETELY REMOVED from this file.
+  // This stops the redirect-to-login-page "fight".
 
   if (loading) {
     return <LoadingSpinner />;
   }
 
+  // This is still important. It prevents the UI from flashing
+  // while the redirect (now in dashboard.js) happens.
   if (!isAuthenticated) {
     return null;
   }
@@ -66,3 +61,4 @@ useEffect(() => {
 };
 
 export default Layout;
+
