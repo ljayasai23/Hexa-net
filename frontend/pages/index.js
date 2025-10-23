@@ -2,21 +2,23 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { Share2, Users, ClipboardList, Wrench, Building, Mail, Phone, MapPin } from 'lucide-react';
 
-// --- Reusable Components (kept inside this file for simplicity) ---
+// --- Reusable Components (Rebuilt to match index.html) ---
 
 const AnimatedNetworkGraphic = () => (
-  <div className="relative w-[300px] h-[300px] md:w-[350px] md:h-[350px]">
-    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-primary-500 pulse-anim" style={{ animationDelay: '0s' }}></div>
-    <div className="absolute top-[20%] left-[15%] w-16 h-16 rounded-full bg-indigo-400 pulse-anim" style={{ animationDelay: '0.5s' }}></div>
-    <div className="absolute top-[15%] right-[20%] w-16 h-16 rounded-full bg-indigo-400 pulse-anim" style={{ animationDelay: '1s' }}></div>
-    <div className="absolute bottom-[20%] left-1/2 -translate-x-1/2 w-16 h-16 rounded-full bg-indigo-400 pulse-anim" style={{ animationDelay: '1.5s' }}></div>
-    <svg className="absolute top-0 left-0 w-full h-full" viewBox="0 0 350 350">
-      <line x1="175" y1="175" x2="87.5" y2="87.5" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
-      <line x1="175" y1="175" x2="262.5" y2="87.5" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
-      <line x1="175" y1="175" x2="175" y2="280" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
-    </svg>
+  // This structure and className matches your index.html file
+  <div className="hero-visual">
+    <div className="network-diagram">
+      <div className="network-node main-hub pulse"></div>
+      <div className="network-node node-1 pulse" style={{ animationDelay: '0.5s' }}></div>
+      <div className="network-node node-2 pulse" style={{ animationDelay: '1s' }}></div>
+      <div className="network-node node-3 pulse" style={{ animationDelay: '1.5s' }}></div>
+      <div className="network-connection conn-1"></div>
+      <div className="network-connection conn-2"></div>
+      <div className="network-connection conn-3"></div>
+    </div>
   </div>
 );
+
 
 const SectionTitle = ({ children }) => (
     <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">{children}</h2>
@@ -41,16 +43,107 @@ export default function LandingPage() {
                 <title>HexaNet - Campus Network Planner</title>
                 <meta name="description" content="The all-in-one platform for planning, designing, and deploying campus networks with seamless collaboration." />
                 <style>{`
+                    /* --- Styles from your style.css file --- */
+                    
                     .hero-background {
-                        background: linear-gradient(135deg, #4f46e5 0%, #1e3a8a 100%);
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        position: relative;
+                        overflow: hidden;
+                    }
+                    .hero-background::before {
+                        content: '';
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+                        opacity: 0.3;
+                    }
+
+                    /* Network Diagram Animation (from style.css) */
+                    .hero-visual {
+                        position: relative;
+                        height: 400px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .network-diagram {
+                        position: relative;
+                        width: 300px;
+                        height: 300px;
+                    }
+                    .network-node {
+                        position: absolute;
+                        width: 60px;
+                        height: 60px;
+                        border-radius: 50%;
+                        background: linear-gradient(135deg, #3b82f6, #1e40af); /* Blue */
+                        border: 3px solid rgba(255, 255, 255, 0.3);
+                        animation: pulse 2s infinite;
+                    }
+                    .network-node.main-hub {
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        width: 80px;
+                        height: 80px;
+                        background: linear-gradient(135deg, #10b981, #059669); /* Green */
+                        animation-delay: 0s;
+                        z-index: 10;
+                    }
+                    .network-node.node-1 {
+                        top: 20%;
+                        left: 20%;
+                        animation-delay: 0.5s;
+                    }
+                    .network-node.node-2 {
+                        top: 20%;
+                        right: 20%; /* Using 'right' as in style.css */
+                        animation-delay: 1s;
+                    }
+                    .network-node.node-3 {
+                        bottom: 20%; /* Using 'bottom' as in style.css */
+                        left: 50%;
+                        transform: translateX(-50%);
+                        animation-delay: 1.5s;
+                    }
+                    .network-connection {
+                        position: absolute;
+                        background: rgba(255, 255, 255, 0.4);
+                        height: 2px;
+                        transform-origin: left center;
+                        z-index: 5;
+                    }
+                    .network-connection.conn-1 {
+                        top: 35%;
+                        left: 35%;
+                        width: 80px;
+                        transform: rotate(-45deg);
+                    }
+                    .network-connection.conn-2 {
+                        top: 35%;
+                        right: 35%; /* Using 'right' */
+                        width: 80px;
+                        transform: rotate(45deg);
+                    }
+                    .network-connection.conn-3 {
+                        bottom: 35%; /* Using 'bottom' */
+                        left: 50%;
+                        width: 80px;
+                        transform: translateX(-50%) rotate(90deg);
                     }
                     @keyframes pulse {
-                        0%, 100% { transform: scale(1); opacity: 1; }
-                        50% { transform: scale(1.1); opacity: 0.7; }
+                        0%, 100% {
+                            box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+                        }
+                        50% {
+                            box-shadow: 0 0 0 20px rgba(255, 255, 255, 0);
+                        }
                     }
-                    .pulse-anim {
-                        animation: pulse 4s ease-in-out infinite;
-                    }
+                    /* --- End of styles from style.css --- */
+
                     html { scroll-behavior: smooth; }
                 `}</style>
             </Head>
@@ -68,7 +161,7 @@ export default function LandingPage() {
                         <a href="#about" className="font-medium text-gray-600 hover:text-primary-600 transition-colors">About</a>
                         <a href="#contact" className="font-medium text-gray-600 hover:text-primary-600 transition-colors">Contact</a>
                     </nav>
-                    <div className="space-x-2">
+                    <div className="flex items-center space-x-2">
                          <Link href="/login" className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:text-primary-600 transition-colors">
                             Login
                         </Link>
@@ -80,17 +173,22 @@ export default function LandingPage() {
 
                 <main>
                     {/* Hero Section */}
-                    <section id="home" className="min-h-screen flex items-center justify-center hero-background text-white relative pt-20">
-                        <div className="max-w-7xl w-full mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    <section id="home" className="min-h-screen flex items-center justify-center hero-background text-white relative pt-20 overflow-hidden">
+                        {/* The ::before selector in the <style> tag handles the grid overlay */}
+                        <div className="max-w-7xl w-full mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
                             <div>
                                 <h1 className="text-4xl lg:text-6xl font-extrabold leading-tight tracking-tighter mb-6 text-center lg:text-left">Designing Campus Networks, Simplified.</h1>
                                 <p className="text-lg lg:text-xl text-indigo-200 mb-8 max-w-lg mx-auto lg:mx-0 text-center lg:text-left">HexaNet is the all-in-one platform for administrators, designers, and installers to collaborate on building robust and efficient campus networks.</p>
+                                
                                 <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                                     <Link href="/register" className="px-8 py-3 font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-lg transition-transform transform hover:scale-105 text-center">Get Started</Link>
-                                     <a href="#services" className="px-8 py-3 font-semibold text-white bg-white/20 hover:bg-white/30 rounded-lg text-center">Learn More</a>
+                                     <Link href="/register" className="px-8 py-3 font-semibold text-white bg-white/20 hover:bg-white/30 rounded-lg text-center w-full sm:w-auto border-2 border-white/30">Get Started</Link>
+                                     <a href="#services" className="px-8 py-3 font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-lg transition-transform transform hover:scale-105 text-center w-full sm:w-auto">Learn More</a>
                                 </div>
                             </div>
-                            <div className="w-full hidden lg:flex items-center justify-center"><AnimatedNetworkGraphic /></div>
+                            
+                            <div className="w-full hidden lg:flex items-center justify-center">
+                                <AnimatedNetworkGraphic />
+                            </div>
                         </div>
                     </section>
 
@@ -153,3 +251,4 @@ export default function LandingPage() {
         </>
     );
 }
+
