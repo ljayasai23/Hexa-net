@@ -40,7 +40,7 @@ export default function LandingPage() {
     return (
         <>
             <Head>
-                <title>HexaNet - Campus Network Planner</title>
+                <title>CampusNet Planner - Campus Network Planner</title>
                 <meta name="description" content="The all-in-one platform for planning, designing, and deploying campus networks with seamless collaboration." />
                 <style>{`
                     /* --- Styles from your style.css file --- */
@@ -153,7 +153,7 @@ export default function LandingPage() {
                 <header className="flex justify-between items-center py-4 px-6 md:px-12 bg-white/95 backdrop-blur-sm shadow-sm fixed top-0 w-full z-50">
                     <a href="#home" className="flex items-center space-x-3">
                         <Share2 className="h-8 w-8 text-primary-600" />
-                        <span className="text-2xl font-bold text-slate-800 tracking-tight">HexaNet</span>
+                        <span className="text-2xl font-bold text-slate-800 tracking-tight">CampusNet Planner</span>
                     </a>
                     <nav className="hidden md:flex items-center space-x-8">
                         <a href="#home" className="font-medium text-gray-600 hover:text-primary-600 transition-colors">Home</a>

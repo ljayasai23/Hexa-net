@@ -1,7 +1,7 @@
 import { useEffect } from 'react'; // Import useEffect
 import { useRouter } from 'next/router'; // Import useRouter
 import { useAuth } from '../contexts/AuthContext';
-import Layout from '../components/Layout';
+// import Layout from '../components/Layout'; // <-- 1. REMOVED THIS IMPORT
 import ClientDashboard from '../components/dashboards/ClientDashboard';
 import AdminDashboard from '../components/dashboards/AdminDashboard';
 import DesignerDashboard from '../components/dashboards/DesignerDashboard';
@@ -14,16 +14,11 @@ export default function Dashboard() {
   // --- THIS IS THE NEW PROTECTION LOGIC ---
   useEffect(() => {
     // If we're not loading and the user is NOT authenticated...
-    // This check now only runs when `loading` or `router` changes.
-    // It will NOT run when `isAuthenticated` changes (i.e., on logout).
     if (!loading && !isAuthenticated) {
       // ...redirect to login.
       router.push('/login');
     }
-    // This logic only runs on this page, so it can't
-    // interfere with the logout redirect anymore.
-  }, [loading, router]); // <-- THE FIX: We removed `isAuthenticated` from this array
-  // --- END OF NEW LOGIC ---
+  }, [loading, isAuthenticated, router]); // <-- Re-added isAuthenticated here for safety
 
 
   // This is important: if we are loading OR if the user is not
@@ -54,9 +49,8 @@ export default function Dashboard() {
   };
 
   return (
-    <Layout>
-      {renderDashboard()}
-    </Layout>
+    // <Layout> <-- 2. REMOVED THIS WRAPPER
+      renderDashboard()
+    // </Layout> <-- 2. REMOVED THIS WRAPPER
   );
 }
-

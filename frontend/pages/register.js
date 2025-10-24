@@ -80,7 +80,7 @@ export default function Register() {
         <div className="flex justify-center items-center mb-6">
           <Link href="/" className="flex items-center space-x-3">
             <Share2 className="h-10 w-10 text-primary-600" />
-            <span className="text-3xl font-bold text-slate-800 tracking-tight">HexaNet</span>
+            <span className="text-3xl font-bold text-slate-800 tracking-tight">CampusNet Planner</span>
           </Link>
         </div>
 
