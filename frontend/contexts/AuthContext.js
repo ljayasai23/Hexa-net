@@ -128,11 +128,21 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     dispatch({ type: 'LOGOUT' }); 
   };
+
+  const updateUser = (userData) => {
+    dispatch({
+      type: 'LOGIN_SUCCESS',
+      payload: { user: userData, token: state.token },
+    });
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
+
   const value = {
     ...state,
     login,
     register,
     logout,
+    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

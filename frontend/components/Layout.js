@@ -24,6 +24,7 @@ const Layout = ({ children }) => {
     };
   }, [profileMenuRef]);
   
+  // Handle loading and authentication states
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -92,17 +93,14 @@ const Layout = ({ children }) => {
                     <p className="text-sm text-gray-500 truncate">{user?.email}</p>
                   </div>
                   <div className="py-1" role="none">
-                    {/* FIX: Added legacyBehavior prop */}
-                    <Link href="/profile-settings" legacyBehavior>
-                      <a className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100 transition-colors duration-150" role="menuitem" tabIndex="-1" id="user-menu-item-0">
-                        Profile Settings
-                      </a>
+                    <Link href="/settings" className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100 transition-colors duration-150" role="menuitem" tabIndex="-1" id="user-menu-item-0">
+                      Settings
                     </Link>
-                    {/* FIX: Added legacyBehavior prop */}
-                    <Link href="/notifications" legacyBehavior>
-                      <a className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100 transition-colors duration-150" role="menuitem" tabIndex="-1" id="user-menu-item-1">
-                        Notifications
-                      </a>
+                    <Link href="/projects" className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100 transition-colors duration-150" role="menuitem" tabIndex="-1" id="user-menu-item-1">
+                      My Projects
+                    </Link>
+                    <Link href="/dashboard" className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100 transition-colors duration-150" role="menuitem" tabIndex="-1" id="user-menu-item-2">
+                      Dashboard
                     </Link>
                   </div>
                   <div className="py-1 border-t" role="none">
