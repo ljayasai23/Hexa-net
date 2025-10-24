@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import useRealTimeUpdates from '../hooks/useRealTimeUpdates';
+import Link from 'next/link';
 
 // Status badge component
 const StatusBadge = ({ status }) => {
@@ -84,12 +85,20 @@ const ProjectCard = ({ project }) => {
             </span>
           </div>
         </div>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-        >
-          {isExpanded ? 'Show Less' : 'View Details'}
-        </button>
+        <div className="flex space-x-2">
+          <Link 
+            href={`/project-detail?id=${project._id}`}
+            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+          >
+            View Details
+          </Link>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-gray-600 hover:text-gray-700 text-sm font-medium"
+          >
+            {isExpanded ? 'Show Less' : 'Show More'}
+          </button>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -151,12 +160,13 @@ const ProjectCard = ({ project }) => {
 };
 
 export default function Projects() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
+
 
   // Real-time data update callback
   const handleDataUpdate = useCallback((newProjects) => {
@@ -171,13 +181,24 @@ export default function Projects() {
     fetchProjects();
   }, []);
 
+
   const fetchProjects = async () => {
     setLoading(true);
     try {
       const response = await requestsAPI.getAll();
-      setProjects(response.data.requests || []);
+      const projectsArray = response.data.requests || [];
+      setProjects(projectsArray);
+      setLastUpdated(new Date());
+      
     } catch (error) {
-      toast.error('Failed to fetch projects');
+      console.error('Failed to fetch projects:', error);
+      if (error.response?.status === 401) {
+        toast.error('Authentication required. Please login again.');
+      } else if (error.response?.status === 403) {
+        toast.error('Access denied. You don\'t have permission to view projects.');
+      } else {
+        toast.error('Failed to fetch projects: ' + (error.response?.data?.message || error.message));
+      }
     } finally {
       setLoading(false);
     }
@@ -185,10 +206,29 @@ export default function Projects() {
 
   const filteredProjects = projects.filter(project => {
     const matchesFilter = filter === 'all' || project.status === filter;
-    const matchesSearch = project.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = searchTerm === '' || 
+                         (project.title && project.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    // Debug logging
+    console.log('Filtering project:', {
+      id: project._id,
+      title: project.title,
+      status: project.status,
+      matchesFilter,
+      matchesSearch,
+      filter,
+      searchTerm
+    });
+    
     return matchesFilter && matchesSearch;
   });
+
+  console.log('Projects count:', projects.length);
+  console.log('Filtered projects count:', filteredProjects.length);
+  console.log('Current filter:', filter);
+  console.log('Search term:', searchTerm);
+
 
   const statusCounts = {
     all: projects.length,
@@ -268,6 +308,7 @@ export default function Projects() {
           </div>
         </div>
       </div>
+
 
       {/* Projects List */}
       <div className="space-y-4">

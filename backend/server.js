@@ -1,11 +1,11 @@
-const dotenv = require('dotenv');
+const dotenv = require('dotenv'); // <-- THIS LINE WAS MISSING
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
-
-// Load environment variables
-dotenv.config();
+// Load environment variables with an explicit path
+dotenv.config({ path: './.env' });
+console.log('MONGO_URI from env:', process.env.MONGO_URI);
 
 const app = express();
 
