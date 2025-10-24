@@ -173,7 +173,7 @@ export default function LandingPage() {
 
                 <main>
                     {/* Hero Section */}
-                    <section id="home" className="min-h-screen flex items-center justify-center hero-background text-white relative pt-20 overflow-hidden">
+                    <section id="home" className="min-h-screen flex items-center justify-center hero-background text-white relative pt-20 pb-20 md:pb-24 overflow-hidden">
                         {/* The ::before selector in the <style> tag handles the grid overlay */}
                         <div className="max-w-7xl w-full mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
                             <div>
@@ -182,7 +182,9 @@ export default function LandingPage() {
                                 
                                 <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                                      <Link href="/register" className="px-8 py-3 font-semibold text-white bg-white/20 hover:bg-white/30 rounded-lg text-center w-full sm:w-auto border-2 border-white/30">Get Started</Link>
-                                     <a href="#services" className="px-8 py-3 font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-lg transition-transform transform hover:scale-105 text-center w-full sm:w-auto">Learn More</a>
+                                     {/* --- CHANGE HERE --- */}
+                                     {/* Added 'border-2 border-transparent' to make its height match the "Get Started" button */}
+                                     <a href="#services" className="px-8 py-3 font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-lg transition-transform transform hover:scale-105 text-center w-full sm:w-auto border-2 border-transparent">Learn More</a>
                                 </div>
                             </div>
                             
