@@ -21,7 +21,7 @@ export default function RequestList({ requests }) {
   const router = useRouter();
 
   const handleViewRequest = (requestId) => {
-    router.push(`/requests/${requestId}`);
+    router.push(`/project-detail?id=${requestId}`);
   };
 
   if (requests.length === 0) {

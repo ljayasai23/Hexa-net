@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ;
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 
 // Create axios instance
@@ -43,6 +43,8 @@ export const authAPI = {
   register: (userData) => api.post('/auth/register', userData),
   login: (credentials) => api.post('/auth/login', credentials),
   getMe: () => api.get('/auth/me'),
+  updateProfile: (profileData) => api.put('/auth/me', profileData),
+  changePassword: (passwordData) => api.put('/auth/password', passwordData),
 };
 
 // Requests API

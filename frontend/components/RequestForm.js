@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { requestsAPI } from '../lib/api';
 import toast from 'react-hot-toast';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import LoadingButton from './LoadingButton'; // <-- 1. IMPORT LOADING BUTTON
 
 export default function RequestForm({ onSuccess, onCancel }) {
   const [formData, setFormData] = useState({
@@ -17,7 +18,7 @@ export default function RequestForm({ onSuccess, onCancel }) {
     },
     priority: 'Medium'
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // const [isSubmitting, setIsSubmitting] = useState(false); // <-- 2. REMOVED THIS STATE
 
   const handleCampusNameChange = (e) => {
     setFormData({
@@ -154,20 +155,22 @@ export default function RequestForm({ onSuccess, onCancel }) {
       return;
     }
 
-    setIsSubmitting(true);
+    // setIsSubmitting(true); // <-- 3. REMOVED THIS
 
     try {
       await requestsAPI.create(formData);
       onSuccess();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to create request');
-    } finally {
-      setIsSubmitting(false);
-    }
+    } 
+    // finally {
+    //   setIsSubmitting(false); // <-- 4. REMOVED THIS
+    // }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    // 5. REMOVED onSubmit from <form>
+    <form className="space-y-6">
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-4">Network Request Details</h3>
         
@@ -312,13 +315,15 @@ export default function RequestForm({ onSuccess, onCancel }) {
         >
           Cancel
         </button>
-        <button
+        {/* 6. REPLACED <button> with <LoadingButton> */}
+        <LoadingButton
           type="submit"
-          disabled={isSubmitting}
+          onClick={handleSubmit}
           className="btn-primary"
+          loadingText="Submitting..."
         >
-          {isSubmitting ? 'Submitting...' : 'Submit Request'}
-        </button>
+          Submit Request
+        </LoadingButton>
       </div>
     </form>
   );
