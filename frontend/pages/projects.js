@@ -75,9 +75,19 @@ const ProjectCard = ({ project }) => {
     <div className="card hover:shadow-lg transition-shadow duration-200">
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {project.title || 'Network Request'}
-          </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {project.requirements?.campusName || project.title || 'Network Request'}
+              </h3>
+              <div className="flex items-center space-x-2 mb-2">
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                  project.requestType === 'Design Only' ? 'bg-blue-100 text-blue-800' :
+                  project.requestType === 'Installation Only' ? 'bg-green-100 text-green-800' :
+                  project.requestType === 'Both Design and Installation' ? 'bg-purple-100 text-purple-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {project.requestType || 'N/A'}
+                </span>
+              </div>
           <div className="flex items-center space-x-4 mb-2">
             <StatusBadge status={project.status} />
             <span className="text-sm text-gray-500">
@@ -87,7 +97,7 @@ const ProjectCard = ({ project }) => {
         </div>
         <div className="flex space-x-2">
           <Link 
-            href={`/project-detail?id=${project._id}`}
+            href={`/project/${project._id}`}
             className="text-primary-600 hover:text-primary-700 text-sm font-medium"
           >
             View Details
@@ -118,12 +128,12 @@ const ProjectCard = ({ project }) => {
 
       {isExpanded && (
         <div className="border-t pt-4 space-y-3">
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
-            <p className="text-sm text-gray-600">
-              {project.description || 'No description provided'}
-            </p>
-          </div>
+              {project.description && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
+                  <p className="text-sm text-gray-600">{project.description}</p>
+                </div>
+              )}
           
           {project.location && (
             <div>

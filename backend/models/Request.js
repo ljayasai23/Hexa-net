@@ -78,7 +78,39 @@ const requestSchema = new mongoose.Schema({
   },
   adminResponseDate: {
     type: Date
-  }
+  },
+  description: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
+  requestType: {
+    type: String,
+    enum: ['Design Only', 'Installation Only', 'Both Design and Installation'],
+    required: true
+  },
+  uploadedFiles: [{
+    filename: {
+      type: String,
+      required: true
+    },
+    originalName: {
+      type: String,
+      required: true
+    },
+    filePath: {
+      type: String,
+      required: true
+    },
+    fileSize: {
+      type: Number,
+      required: true
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, {
   timestamps: true
 });

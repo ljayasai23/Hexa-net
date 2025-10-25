@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 const Request = require('../models/Request');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -14,7 +15,9 @@ router.post('/', [
   auth,
   authorize('Client'),
   body('requirements.campusName').notEmpty().withMessage('Campus name is required'),
-  body('requirements.departments').isArray({ min: 1 }).withMessage('At least one department is required')
+  body('requirements.departments').isArray({ min: 1 }).withMessage('At least one department is required'),
+  body('description').optional().isLength({ max: 500 }).withMessage('Description must be less than 500 characters'),
+  body('requestType').isIn(['Design Only', 'Installation Only', 'Both Design and Installation']).withMessage('Invalid request type')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -25,12 +28,14 @@ router.post('/', [
       });
     }
 
-    const { requirements, priority = 'Medium' } = req.body;
+    const { requirements, priority = 'Medium', description, requestType } = req.body;
 
     const request = new Request({
       client: req.user._id,
       requirements,
-      priority
+      priority,
+      description,
+      requestType
     });
 
     await request.save();
@@ -205,6 +210,18 @@ router.put('/:id/assign', [
       { new: true, runValidators: true }
     ).populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email role');
 
+    // Create notification for the client
+    if (updatedRequest.client) {
+      const notification = new Notification({
+        user: updatedRequest.client._id,
+        project: updatedRequest._id,
+        type: 'assignment',
+        title: 'Project Assignment Update',
+        message: `Your project "${updatedRequest.title || 'Network Request'}" has been assigned to a designer. Status: ${updatedRequest.status}`
+      });
+      await notification.save();
+    }
+
     res.json({
       message: 'Request updated successfully',
       request: updatedRequest
@@ -297,6 +314,18 @@ router.put('/:id/response', [
       },
       { new: true, runValidators: true }
     ).populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email role');
+
+    // Create notification for the client
+    if (updatedRequest.client) {
+      const notification = new Notification({
+        user: updatedRequest.client._id,
+        project: updatedRequest._id,
+        type: 'response',
+        title: 'Admin Response',
+        message: `You have received a response from the admin for your project "${updatedRequest.title || 'Network Request'}"`
+      });
+      await notification.save();
+    }
 
     res.json({
       message: 'Admin response added successfully',

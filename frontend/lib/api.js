@@ -57,6 +57,13 @@ export const requestsAPI = {
   updateStatus: (id, status) => api.put(`/requests/${id}/status`, { status }),
 };
 
+// Notifications API
+export const notificationsAPI = {
+  getAll: () => api.get('/notifications'),
+  markAsRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllAsRead: () => api.put('/notifications/read-all'),
+};
+
 // Admin API
 export const adminAPI = {
   getDevices: (params = {}) => api.get('/admin/devices', { params }),
