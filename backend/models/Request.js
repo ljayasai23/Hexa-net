@@ -13,23 +13,11 @@ const requestSchema = new mongoose.Schema({
   },
   assignedDesigner: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    validate: {
-      validator: function(v) {
-        return !v || this.status !== 'New';
-      },
-      message: 'Cannot assign designer to new requests'
-    }
+    ref: 'User'
   },
   assignedInstaller: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    validate: {
-      validator: function(v) {
-        return !v || ['Design Complete', 'Installation In Progress', 'Completed'].includes(this.status);
-      },
-      message: 'Cannot assign installer until design is complete'
-    }
+    ref: 'User'
   },
   requirements: {
     campusName: {
@@ -76,6 +64,19 @@ const requestSchema = new mongoose.Schema({
     type: Date
   },
   actualCompletionDate: {
+    type: Date
+  },
+  progress: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
+  },
+  adminResponse: {
+    type: String,
+    trim: true
+  },
+  adminResponseDate: {
     type: Date
   }
 }, {

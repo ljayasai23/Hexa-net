@@ -53,6 +53,7 @@ export const requestsAPI = {
   getAll: () => api.get('/requests'),
   getById: (id) => api.get(`/requests/${id}`),
   assign: (id, assignmentData) => api.put(`/requests/${id}/assign`, assignmentData),
+  addResponse: (id, responseData) => api.put(`/requests/${id}/response`, responseData),
   updateStatus: (id, status) => api.put(`/requests/${id}/status`, { status }),
 };
 
