@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { requestsAPI } from '../lib/api';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -75,9 +75,19 @@ const ProjectCard = ({ project }) => {
     <div className="card hover:shadow-lg transition-shadow duration-200">
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {project.title || 'Network Request'}
-          </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {project.requirements?.campusName || project.title || 'Network Request'}
+              </h3>
+              <div className="flex items-center space-x-2 mb-2">
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                  project.requestType === 'Design Only' ? 'bg-blue-100 text-blue-800' :
+                  project.requestType === 'Installation Only' ? 'bg-green-100 text-green-800' :
+                  project.requestType === 'Both Design and Installation' ? 'bg-purple-100 text-purple-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {project.requestType || 'N/A'}
+                </span>
+              </div>
           <div className="flex items-center space-x-4 mb-2">
             <StatusBadge status={project.status} />
             <span className="text-sm text-gray-500">
@@ -87,7 +97,7 @@ const ProjectCard = ({ project }) => {
         </div>
         <div className="flex space-x-2">
           <Link 
-            href={`/project-detail?id=${project._id}`}
+            href={`/project/${project._id}`}
             className="text-primary-600 hover:text-primary-700 text-sm font-medium"
           >
             View Details
@@ -105,24 +115,25 @@ const ProjectCard = ({ project }) => {
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-medium text-gray-700">Progress</span>
           <span className="text-sm text-gray-600">
-            {project.status === 'Completed' ? '100%' : 
-             project.status === 'New' ? '0%' :
-             project.status === 'Assigned' ? '20%' :
-             project.status === 'Design In Progress' ? '40%' :
-             project.status === 'Installation In Progress' ? '80%' : '0%'}
+            {project.progress || 0}%
           </span>
         </div>
-        <ProgressBar status={project.status} />
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div 
+            className="bg-primary-600 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${project.progress || 0}%` }}
+          ></div>
+        </div>
       </div>
 
       {isExpanded && (
         <div className="border-t pt-4 space-y-3">
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
-            <p className="text-sm text-gray-600">
-              {project.description || 'No description provided'}
-            </p>
-          </div>
+              {project.description && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
+                  <p className="text-sm text-gray-600">{project.description}</p>
+                </div>
+              )}
           
           {project.location && (
             <div>
@@ -135,6 +146,20 @@ const ProjectCard = ({ project }) => {
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-1">Assigned To</h4>
               <p className="text-sm text-gray-600">{project.assignedTo}</p>
+            </div>
+          )}
+
+          {project.adminResponse && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-1">Admin Response</h4>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-gray-700">{project.adminResponse}</p>
+                {project.adminResponseDate && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Response Date: {new Date(project.adminResponseDate).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -181,6 +206,14 @@ export default function Projects() {
     fetchProjects();
   }, []);
 
+  // Force re-render when projects change
+  const [forceRender, setForceRender] = useState(0);
+  useEffect(() => {
+    if (projects.length > 0) {
+      setForceRender(prev => prev + 1);
+    }
+  }, [projects]);
+
 
   const fetchProjects = async () => {
     setLoading(true);
@@ -204,35 +237,23 @@ export default function Projects() {
     }
   };
 
+  // Simple filtering without useMemo
   const filteredProjects = projects.filter(project => {
     const matchesFilter = filter === 'all' || project.status === filter;
     const matchesSearch = searchTerm === '' || 
                          (project.title && project.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    // Debug logging
-    console.log('Filtering project:', {
-      id: project._id,
-      title: project.title,
-      status: project.status,
-      matchesFilter,
-      matchesSearch,
-      filter,
-      searchTerm
-    });
+                         (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (project.location && project.location.toLowerCase().includes(searchTerm.toLowerCase()));
     
     return matchesFilter && matchesSearch;
   });
 
-  console.log('Projects count:', projects.length);
-  console.log('Filtered projects count:', filteredProjects.length);
-  console.log('Current filter:', filter);
-  console.log('Search term:', searchTerm);
 
 
   const statusCounts = {
     all: projects.length,
     New: projects.filter(p => p.status === 'New').length,
+    'In Progress': projects.filter(p => p.status === 'In Progress').length,
     Assigned: projects.filter(p => p.status === 'Assigned').length,
     'Design In Progress': projects.filter(p => p.status === 'Design In Progress').length,
     'Installation In Progress': projects.filter(p => p.status === 'Installation In Progress').length,
@@ -244,7 +265,7 @@ export default function Projects() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div key={forceRender} className="max-w-7xl mx-auto p-6">
       <div className="mb-8">
         <div className="flex justify-between items-center">
           <div>
@@ -312,6 +333,7 @@ export default function Projects() {
 
       {/* Projects List */}
       <div className="space-y-4">
+        
         {filteredProjects.length === 0 ? (
           <div className="card text-center py-12">
             <div className="text-gray-500">

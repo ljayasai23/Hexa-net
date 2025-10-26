@@ -18,6 +18,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/requests', require('./routes/requests'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/designs', require('./routes/designs'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // MongoDB connection
 const MONGODB_URI = process.env.MONGO_URI;

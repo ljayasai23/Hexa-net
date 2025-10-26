@@ -13,23 +13,11 @@ const requestSchema = new mongoose.Schema({
   },
   assignedDesigner: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    validate: {
-      validator: function(v) {
-        return !v || this.status !== 'New';
-      },
-      message: 'Cannot assign designer to new requests'
-    }
+    ref: 'User'
   },
   assignedInstaller: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    validate: {
-      validator: function(v) {
-        return !v || ['Design Complete', 'Installation In Progress', 'Completed'].includes(this.status);
-      },
-      message: 'Cannot assign installer until design is complete'
-    }
+    ref: 'User'
   },
   requirements: {
     campusName: {
@@ -77,7 +65,52 @@ const requestSchema = new mongoose.Schema({
   },
   actualCompletionDate: {
     type: Date
-  }
+  },
+  progress: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
+  },
+  adminResponse: {
+    type: String,
+    trim: true
+  },
+  adminResponseDate: {
+    type: Date
+  },
+  description: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
+  requestType: {
+    type: String,
+    enum: ['Design Only', 'Installation Only', 'Both Design and Installation'],
+    required: true
+  },
+  uploadedFiles: [{
+    filename: {
+      type: String,
+      required: true
+    },
+    originalName: {
+      type: String,
+      required: true
+    },
+    filePath: {
+      type: String,
+      required: true
+    },
+    fileSize: {
+      type: Number,
+      required: true
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, {
   timestamps: true
 });
