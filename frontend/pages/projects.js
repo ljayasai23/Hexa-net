@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { useState, useEffect, useCallback, useMemo } from 'react';
+=======
+import { useState, useEffect, useCallback } from 'react';
+>>>>>>> 220ba6f (design updated)
 import { requestsAPI } from '../lib/api';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -75,6 +79,7 @@ const ProjectCard = ({ project }) => {
     <div className="card hover:shadow-lg transition-shadow duration-200">
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
+<<<<<<< HEAD
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 {project.requirements?.campusName || project.title || 'Network Request'}
               </h3>
@@ -88,6 +93,11 @@ const ProjectCard = ({ project }) => {
                   {project.requestType || 'N/A'}
                 </span>
               </div>
+=======
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            {project.title || 'Network Request'}
+          </h3>
+>>>>>>> 220ba6f (design updated)
           <div className="flex items-center space-x-4 mb-2">
             <StatusBadge status={project.status} />
             <span className="text-sm text-gray-500">
@@ -97,7 +107,11 @@ const ProjectCard = ({ project }) => {
         </div>
         <div className="flex space-x-2">
           <Link 
+<<<<<<< HEAD
             href={`/project/${project._id}`}
+=======
+            href={`/project-detail?id=${project._id}`}
+>>>>>>> 220ba6f (design updated)
             className="text-primary-600 hover:text-primary-700 text-sm font-medium"
           >
             View Details
@@ -115,6 +129,7 @@ const ProjectCard = ({ project }) => {
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-medium text-gray-700">Progress</span>
           <span className="text-sm text-gray-600">
+<<<<<<< HEAD
             {project.progress || 0}%
           </span>
         </div>
@@ -124,16 +139,35 @@ const ProjectCard = ({ project }) => {
             style={{ width: `${project.progress || 0}%` }}
           ></div>
         </div>
+=======
+            {project.status === 'Completed' ? '100%' : 
+             project.status === 'New' ? '0%' :
+             project.status === 'Assigned' ? '20%' :
+             project.status === 'Design In Progress' ? '40%' :
+             project.status === 'Installation In Progress' ? '80%' : '0%'}
+          </span>
+        </div>
+        <ProgressBar status={project.status} />
+>>>>>>> 220ba6f (design updated)
       </div>
 
       {isExpanded && (
         <div className="border-t pt-4 space-y-3">
+<<<<<<< HEAD
               {project.description && (
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
                   <p className="text-sm text-gray-600">{project.description}</p>
                 </div>
               )}
+=======
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
+            <p className="text-sm text-gray-600">
+              {project.description || 'No description provided'}
+            </p>
+          </div>
+>>>>>>> 220ba6f (design updated)
           
           {project.location && (
             <div>
@@ -149,6 +183,7 @@ const ProjectCard = ({ project }) => {
             </div>
           )}
 
+<<<<<<< HEAD
           {project.adminResponse && (
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-1">Admin Response</h4>
@@ -163,6 +198,8 @@ const ProjectCard = ({ project }) => {
             </div>
           )}
 
+=======
+>>>>>>> 220ba6f (design updated)
           {project.updatedAt && (
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-1">Last Updated</h4>
@@ -206,6 +243,7 @@ export default function Projects() {
     fetchProjects();
   }, []);
 
+<<<<<<< HEAD
   // Force re-render when projects change
   const [forceRender, setForceRender] = useState(0);
   useEffect(() => {
@@ -214,6 +252,8 @@ export default function Projects() {
     }
   }, [projects]);
 
+=======
+>>>>>>> 220ba6f (design updated)
 
   const fetchProjects = async () => {
     setLoading(true);
@@ -237,23 +277,51 @@ export default function Projects() {
     }
   };
 
+<<<<<<< HEAD
   // Simple filtering without useMemo
+=======
+>>>>>>> 220ba6f (design updated)
   const filteredProjects = projects.filter(project => {
     const matchesFilter = filter === 'all' || project.status === filter;
     const matchesSearch = searchTerm === '' || 
                          (project.title && project.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+<<<<<<< HEAD
                          (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
                          (project.location && project.location.toLowerCase().includes(searchTerm.toLowerCase()));
+=======
+                         (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    // Debug logging
+    console.log('Filtering project:', {
+      id: project._id,
+      title: project.title,
+      status: project.status,
+      matchesFilter,
+      matchesSearch,
+      filter,
+      searchTerm
+    });
+>>>>>>> 220ba6f (design updated)
     
     return matchesFilter && matchesSearch;
   });
 
+<<<<<<< HEAD
+=======
+  console.log('Projects count:', projects.length);
+  console.log('Filtered projects count:', filteredProjects.length);
+  console.log('Current filter:', filter);
+  console.log('Search term:', searchTerm);
+>>>>>>> 220ba6f (design updated)
 
 
   const statusCounts = {
     all: projects.length,
     New: projects.filter(p => p.status === 'New').length,
+<<<<<<< HEAD
     'In Progress': projects.filter(p => p.status === 'In Progress').length,
+=======
+>>>>>>> 220ba6f (design updated)
     Assigned: projects.filter(p => p.status === 'Assigned').length,
     'Design In Progress': projects.filter(p => p.status === 'Design In Progress').length,
     'Installation In Progress': projects.filter(p => p.status === 'Installation In Progress').length,
@@ -265,7 +333,11 @@ export default function Projects() {
   }
 
   return (
+<<<<<<< HEAD
     <div key={forceRender} className="max-w-7xl mx-auto p-6">
+=======
+    <div className="max-w-7xl mx-auto p-6">
+>>>>>>> 220ba6f (design updated)
       <div className="mb-8">
         <div className="flex justify-between items-center">
           <div>
@@ -333,7 +405,10 @@ export default function Projects() {
 
       {/* Projects List */}
       <div className="space-y-4">
+<<<<<<< HEAD
         
+=======
+>>>>>>> 220ba6f (design updated)
         {filteredProjects.length === 0 ? (
           <div className="card text-center py-12">
             <div className="text-gray-500">

@@ -1,5 +1,9 @@
+<<<<<<< HEAD
 const ipSubnetCalculator = require('ip-subnet-calculator');
 
+=======
+const { Netmask } = require('netmask');
+>>>>>>> 220ba6f (design updated)
 // Generate logical design based on request requirements
 const generateDesign = async (request) => {
   try {
@@ -9,10 +13,18 @@ const generateDesign = async (request) => {
     const departmentHosts = aggregateHostsByDepartment(requirements.departments);
     
     // Step 2: Calculate required hardware
+<<<<<<< HEAD
     const billOfMaterials = await calculateHardwareRequirements(departmentHosts);
     
     // Step 3: Generate IP plan with VLANs and subnets
     const ipPlan = generateIPPlan(departmentHosts);
+=======
+    // NOTE: Requires Device.js model to be imported inside this function due to dependency loop
+    const billOfMaterials = await calculateHardwareRequirements(departmentHosts);
+    
+    // Step 3: Generate IP plan with VLANs and subnets
+    const ipPlan = generateIPPlan(departmentHosts); // <--- Call that failed
+>>>>>>> 220ba6f (design updated)
     
     // Step 4: Generate topology diagram
     const topologyDiagram = generateTopologyDiagram(departmentHosts, billOfMaterials);
@@ -28,7 +40,12 @@ const generateDesign = async (request) => {
     };
   } catch (error) {
     console.error('Design generation error:', error);
+<<<<<<< HEAD
     throw new Error('Failed to generate design');
+=======
+    // Modified to be less verbose in the logs
+    throw new Error('Failed to generate design'); 
+>>>>>>> 220ba6f (design updated)
   }
 };
 
@@ -143,6 +160,7 @@ const calculateHardwareRequirements = async (departmentHosts) => {
 };
 
 // Generate IP plan with VLANs and subnets
+<<<<<<< HEAD
 const generateIPPlan = (departmentHosts) => {
   const ipPlan = [];
   let vlanId = 10; // Start VLAN IDs from 10
@@ -194,6 +212,89 @@ const generateIPPlan = (departmentHosts) => {
       hostCount: hosts.totalHosts
     });
     
+=======
+// Generate IP plan with VLANs and subnets
+// Generate IP plan with VLANs and subnets
+const generateIPPlan = (departmentHosts) => {
+  const ipPlan = [];
+  let vlanId = 10; // Start dynamic VLAN IDs from 10
+  
+  // Initialize the starting IP components for non-contiguous allocation
+  let octet2 = 10; 
+  let octet3 = 1; 
+
+  // --- 1. Add Management VLAN (Fixed) ---
+  const mgmtCidr = '10.1.1.0/24';
+  
+  // *** Use Netmask to calculate subnet details ***
+  const mgmtMask = new Netmask(mgmtCidr);
+
+  ipPlan.push({
+    vlanId: 1,
+    departmentName: 'Management',
+    subnet: mgmtCidr,
+    subnetMask: mgmtMask.mask, // Provided by Netmask
+    networkAddress: mgmtMask.base, // Provided by Netmask
+    broadcastAddress: mgmtMask.broadcast, // Provided by Netmask
+    usableHosts: mgmtMask.size - 2, // Netmask size is total addresses; subtract 2 for usable
+    hostCount: 2
+  });
+  
+  // --- 2. Add VLAN for each department ---
+  Object.entries(departmentHosts).forEach(([deptName, hosts]) => {
+    try {
+        const requiredHosts = hosts.totalHosts + 10; // Add buffer
+        
+        let prefixSize;
+        // Logic to determine the smallest necessary prefix size
+        if (requiredHosts <= 2) prefixSize = 30;
+        else if (requiredHosts <= 6) prefixSize = 29;
+        else if (requiredHosts <= 14) prefixSize = 28;
+        else if (requiredHosts <= 30) prefixSize = 27;
+        else if (requiredHosts <= 62) prefixSize = 26;
+        else if (requiredHosts <= 126) prefixSize = 25;
+        else if (requiredHosts <= 254) prefixSize = 24;
+        else if (requiredHosts <= 510) prefixSize = 23;
+        else if (requiredHosts <= 1022) prefixSize = 22;
+        else if (requiredHosts <= 2046) prefixSize = 21;
+        else prefixSize = 20;
+
+        // SAFE ADDRESS GENERATION (Manual increment ensures uniqueness)
+        const networkCidr = `10.${octet2}.${octet3}.0/${prefixSize}`;
+        
+        // *** Use Netmask for dynamic department subnets ***
+        const deptMask = new Netmask(networkCidr);
+        
+        // NOTE: The Netmask constructor throws if the input is bad, which we let the try/catch handle.
+
+        ipPlan.push({
+            vlanId,
+            departmentName: deptName,
+            subnet: networkCidr,
+            subnetMask: deptMask.mask, // Provided by Netmask
+            networkAddress: deptMask.base, // Provided by Netmask
+            broadcastAddress: deptMask.broadcast, // Provided by Netmask
+            usableHosts: deptMask.size - 2, // Netmask size is total addresses; subtract 2
+            hostCount: hosts.totalHosts
+        });
+        
+        // Increment to the next IP block (The Safest Non-Contiguous Way)
+        octet3++; 
+        if (octet3 > 254) {
+            octet3 = 1;
+            octet2++;
+        }
+        if (octet2 > 254) {
+            // This is just a safeguard; you have a massive address space before this triggers.
+            throw new Error('IP address space exhausted (10.x.x.x limit).');
+        }
+
+    } catch (err) {
+        // If Netmask failed, log the specific error
+        console.error(`ERROR: Subnet calculation failed for ${deptName}:`, err.message);
+        throw new Error(`Failed to generate design: ${err.message}`);
+    }
+>>>>>>> 220ba6f (design updated)
     vlanId++;
   });
   

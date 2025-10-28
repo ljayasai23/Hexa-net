@@ -1,13 +1,17 @@
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+<<<<<<< HEAD
 import { useState, useEffect } from 'react';
 import { requestsAPI } from '../../lib/api';
 import { toast } from 'react-hot-toast';
 import LoadingSpinner from '../../components/LoadingSpinner';
+=======
+>>>>>>> 220ba6f (design updated)
 
 export default function ProjectDetail() {
   const router = useRouter();
   const { id } = router.query;
+<<<<<<< HEAD
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -47,6 +51,11 @@ export default function ProjectDetail() {
         </div>
       </div>
     );
+=======
+
+  if (router.isFallback) {
+    return <div>Loading...</div>;
+>>>>>>> 220ba6f (design updated)
   }
 
   return (
@@ -58,6 +67,7 @@ export default function ProjectDetail() {
           </svg>
           Back to Projects
         </Link>
+<<<<<<< HEAD
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -78,12 +88,21 @@ export default function ProjectDetail() {
             <span>Refresh</span>
           </button>
         </div>
+=======
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Project Details
+        </h1>
+        <p className="text-gray-600">
+          Project ID: {id}
+        </p>
+>>>>>>> 220ba6f (design updated)
       </div>
 
       <div className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Project Information</h2>
         <div className="space-y-4">
           <div>
+<<<<<<< HEAD
             <h4 className="text-sm font-medium text-gray-700 mb-1">Campus Name</h4>
             <p className="text-sm text-gray-600">{project.requirements?.campusName || 'N/A'}</p>
           </div>
@@ -126,10 +145,19 @@ export default function ProjectDetail() {
             <p className="text-sm text-gray-600">
               {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'N/A'}
             </p>
+=======
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Project ID</h4>
+            <p className="text-sm text-gray-600 font-mono">{id}</p>
+          </div>
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Status</h4>
+            <p className="text-sm text-gray-600">This is a test project detail page</p>
+>>>>>>> 220ba6f (design updated)
           </div>
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Progress Section */}
       <div className="card mt-6 border-2 border-primary-200 bg-gradient-to-r from-primary-50 to-blue-50">
         <div className="flex items-center justify-between mb-6">
@@ -284,6 +312,16 @@ export default function ProjectDetail() {
               </div>
             </div>
           )}
+=======
+      <div className="card mt-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Debug Information</h2>
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">Router Ready: {router.isReady ? 'Yes' : 'No'}</p>
+          <p className="text-sm text-gray-600">Project ID: {id || 'Not available'}</p>
+          <p className="text-sm text-gray-600">Query: {JSON.stringify(router.query)}</p>
+          <p className="text-sm text-gray-600">Pathname: {router.pathname}</p>
+          <p className="text-sm text-gray-600">AsPath: {router.asPath}</p>
+>>>>>>> 220ba6f (design updated)
         </div>
       </div>
     </div>

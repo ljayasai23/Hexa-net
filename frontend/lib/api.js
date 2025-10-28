@@ -53,6 +53,7 @@ export const requestsAPI = {
   getAll: () => api.get('/requests'),
   getById: (id) => api.get(`/requests/${id}`),
   assign: (id, assignmentData) => api.put(`/requests/${id}/assign`, assignmentData),
+<<<<<<< HEAD
   addResponse: (id, responseData) => api.put(`/requests/${id}/response`, responseData),
   updateStatus: (id, status) => api.put(`/requests/${id}/status`, { status }),
 };
@@ -64,6 +65,11 @@ export const notificationsAPI = {
   markAllAsRead: () => api.put('/notifications/read-all'),
 };
 
+=======
+  updateStatus: (id, status) => api.put(`/requests/${id}/status`, { status }),
+};
+
+>>>>>>> 220ba6f (design updated)
 // Admin API
 export const adminAPI = {
   getDevices: (params = {}) => api.get('/admin/devices', { params }),

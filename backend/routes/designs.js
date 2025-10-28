@@ -95,6 +95,69 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
+=======
+// @route   PUT /api/designs/:id
+// @desc    Update a specific design (BOM, IP Plan, Diagram Syntax)
+// @access  Private (Network Designer only)
+router.put('/:id', [
+  auth,
+  authorize('Network Designer'),
+  body('billOfMaterials').optional().isArray().withMessage('BOM must be an array'),
+  body('ipPlan').optional().isArray().withMessage('IP Plan must be an array'),
+  body('topologyDiagram').optional().isString().withMessage('Topology diagram must be a string'),
+  body('totalEstimatedCost').optional().isNumeric().withMessage('Total cost must be a number')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: errors.array() 
+      });
+    }
+
+    const { billOfMaterials, ipPlan, topologyDiagram, totalEstimatedCost } = req.body;
+    const design = await LogicDesign.findById(req.params.id).populate('request');
+
+    if (!design) {
+      return res.status(404).json({ message: 'Design not found' });
+    }
+
+    // Check assignment and approval status
+    if (design.request.assignedDesigner?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied. You are not assigned to this request.' });
+    }
+    if (design.isApproved) {
+      return res.status(400).json({ message: 'Cannot edit an approved design.' });
+    }
+
+    // Prepare update object
+    const updateFields = {};
+    if (billOfMaterials) updateFields.billOfMaterials = billOfMaterials;
+    if (ipPlan) updateFields.ipPlan = ipPlan;
+    if (topologyDiagram) updateFields.topologyDiagram = topologyDiagram;
+    if (totalEstimatedCost) updateFields.totalEstimatedCost = totalEstimatedCost;
+    
+    // Perform update
+    const updatedDesign = await LogicDesign.findByIdAndUpdate(
+      req.params.id,
+      updateFields,
+      { new: true, runValidators: true }
+    ).populate('billOfMaterials.device');
+
+    res.json({
+      message: 'Design updated successfully (Draft Saved)',
+      design: updatedDesign
+    });
+  } catch (error) {
+    console.error('Update design error:', error);
+    res.status(500).json({ message: 'Server error updating design' });
+  }
+});
+
+
+>>>>>>> 220ba6f (design updated)
 // @route   PUT /api/designs/:id/approve
 // @desc    Approve a design
 // @access  Private (Network Designer only)
@@ -123,8 +186,18 @@ router.put('/:id/approve', [
     if (design.request.assignedDesigner?.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Access denied. You are not assigned to this request.' });
     }
+<<<<<<< HEAD
 
     // Update design
+=======
+    
+    // Check if it's already approved
+    if (design.isApproved) {
+        return res.status(400).json({ message: 'Design is already approved.' });
+    }
+
+    // Update design document fields
+>>>>>>> 220ba6f (design updated)
     design.isApproved = true;
     design.approvedBy = req.user._id;
     design.approvedAt = new Date();
@@ -132,11 +205,28 @@ router.put('/:id/approve', [
       design.designNotes = designNotes;
     }
 
+<<<<<<< HEAD
     await design.save();
 
     // Update request status
     design.request.status = 'Design Complete';
     await design.request.save();
+=======
+    // Save the updated design document
+    await design.save(); 
+
+    // FIX: Update the Request status directly using findByIdAndUpdate for reliability
+    const requestId = design.request._id;
+    const updatedRequest = await Request.findByIdAndUpdate(
+        requestId,
+        { status: 'Design Complete' },
+        { new: true }
+    );
+
+    if (!updatedRequest) {
+        return res.status(504).json({ message: 'Design approved, but failed to update main request status.' });
+    }
+>>>>>>> 220ba6f (design updated)
 
     res.json({
       message: 'Design approved successfully',
@@ -180,4 +270,8 @@ router.get('/request/:requestId', auth, async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
 module.exports = router;
+=======
+module.exports = router;
+>>>>>>> 220ba6f (design updated)
