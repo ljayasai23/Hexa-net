@@ -1,11 +1,16 @@
 const express = require('express');
+
+// --- MODIFIED IMPORT ---
+// const Notification = require('../models/Notification'); // DELETE THIS LINE
+const { auth, authorize } = require('../middleware/auth');
+const { createNotification } = require('./notifications');
 const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 const Request = require('../models/Request');
 const User = require('../models/User');
-const Notification = require('../models/Notification');
-const { auth, authorize } = require('../middleware/auth');
 
+
+const Notification = require('../models/Notification');
 const router = express.Router();
 
 // @route   POST /api/requests
@@ -372,7 +377,28 @@ router.put('/:id/complete-by-client', auth, async (req, res) => {
   
       // NOTE: You may want to add logic here to notify the Admin and/or Installer 
       // that the client has approved and marked the project as complete.
-  
+      // NOTE: Notify the Designer (and Admin) that the client accepted the design
+      if (request.assignedDesigner) {
+        await createNotification({
+            user: request.assignedDesigner,
+            request: request._id,
+            type: 'client_acceptance',
+            title: '✅ Design Accepted by Client',
+            message: `Your design report for project ${request._id.toString().slice(-4)} has been formally accepted by the client.`
+        });
+      }
+      
+      // Optional: Notify Admin that client finalized the request
+      const webAdmins = await User.find({ role: 'Web Admin' });
+      if (webAdmins.length > 0) {
+          await Promise.all(webAdmins.map(admin => createNotification({
+              user: admin._id,
+              request: request._id,
+              type: 'project_completed',
+              title: 'Project Completed by Client',
+              message: `Project ${request._id.toString().slice(-4)} has been marked as completed by the client.`
+          })));
+      }
       res.json({
         message: 'Request successfully marked as Completed by Client',
         request

@@ -45,11 +45,23 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
   const handleViewDesign = async (requestId) => {
     setLoading(true);
     try {
-      const response = await designsAPI.getByRequest(requestId);
-      setDesign(response.data.design);
+      // 1. Fetch the Request details (Crucial to get the CURRENT STATUS)
+      const requestResponse = await requestsAPI.getById(requestId);
+      const requestData = requestResponse.data.request; // This has the status: 'Design In Progress'
+
+      // 2. Fetch the Design linked to the request
+      const designResponse = await designsAPI.getByRequest(requestId);
+      const designData = designResponse.data.design;
+      
+      // 3. CRITICAL FIX: Attach the full request object to the design object
+      //    This makes 'design.request.status' available to the DesignModal's logic.
+      designData.request = requestData; 
+      
+      setDesign(designData);
+      // We don't necessarily need setSelectedRequest here, but setting design is key.
       setShowDesignModal(true);
     } catch (error) {
-      toast.error('Failed to fetch design');
+      toast.error('Failed to fetch design or request details.');
     } finally {
       setLoading(false);
     }

@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { useState, useEffect, useCallback, useMemo } from 'react';
-=======
-import { useState, useEffect, useCallback } from 'react';
->>>>>>> 220ba6f (design updated)
 import { requestsAPI } from '../lib/api';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -26,6 +22,11 @@ const StatusBadge = ({ status }) => {
         return 'bg-green-100 text-green-800';
       case 'Rejected':
         return 'bg-red-100 text-red-800';
+      // ADDED NEW STATUSES for better visibility
+      case 'Design Submitted':
+        return 'bg-orange-200 text-orange-900';
+      case 'Awaiting Client Review':
+        return 'bg-teal-200 text-teal-900';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -48,6 +49,10 @@ const ProgressBar = ({ status }) => {
         return 20;
       case 'Design In Progress':
         return 40;
+      case 'Design Submitted': // New status update
+        return 50;
+      case 'Awaiting Client Review': // New status update
+        return 60;
       case 'Installation In Progress':
         return 80;
       case 'Completed':
@@ -75,29 +80,16 @@ const ProgressBar = ({ status }) => {
 const ProjectCard = ({ project }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // FIX: Use the correct project title property (campusName is generally more informative)
+  const projectTitle = project.requirements?.campusName || project.title || 'Network Request';
+
   return (
     <div className="card hover:shadow-lg transition-shadow duration-200">
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
-<<<<<<< HEAD
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {project.requirements?.campusName || project.title || 'Network Request'}
-              </h3>
-              <div className="flex items-center space-x-2 mb-2">
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                  project.requestType === 'Design Only' ? 'bg-blue-100 text-blue-800' :
-                  project.requestType === 'Installation Only' ? 'bg-green-100 text-green-800' :
-                  project.requestType === 'Both Design and Installation' ? 'bg-purple-100 text-purple-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {project.requestType || 'N/A'}
-                </span>
-              </div>
-=======
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {project.title || 'Network Request'}
+            {projectTitle}
           </h3>
->>>>>>> 220ba6f (design updated)
           <div className="flex items-center space-x-4 mb-2">
             <StatusBadge status={project.status} />
             <span className="text-sm text-gray-500">
@@ -106,12 +98,9 @@ const ProjectCard = ({ project }) => {
           </div>
         </div>
         <div className="flex space-x-2">
+          {/* RESOLUTION: Keeping the necessary link format for project-detail.js */}
           <Link 
-<<<<<<< HEAD
-            href={`/project/${project._id}`}
-=======
             href={`/project-detail?id=${project._id}`}
->>>>>>> 220ba6f (design updated)
             className="text-primary-600 hover:text-primary-700 text-sm font-medium"
           >
             View Details
@@ -128,18 +117,8 @@ const ProjectCard = ({ project }) => {
       <div className="mb-4">
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-medium text-gray-700">Progress</span>
+          {/* RESOLUTION: Keeping the logic from the newer version using the ProgressBar component */}
           <span className="text-sm text-gray-600">
-<<<<<<< HEAD
-            {project.progress || 0}%
-          </span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div 
-            className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${project.progress || 0}%` }}
-          ></div>
-        </div>
-=======
             {project.status === 'Completed' ? '100%' : 
              project.status === 'New' ? '0%' :
              project.status === 'Assigned' ? '20%' :
@@ -148,26 +127,17 @@ const ProjectCard = ({ project }) => {
           </span>
         </div>
         <ProgressBar status={project.status} />
->>>>>>> 220ba6f (design updated)
       </div>
 
       {isExpanded && (
         <div className="border-t pt-4 space-y-3">
-<<<<<<< HEAD
-              {project.description && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
-                  <p className="text-sm text-gray-600">{project.description}</p>
-                </div>
-              )}
-=======
+          {/* RESOLUTION: Keeping the clean description block */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
             <p className="text-sm text-gray-600">
               {project.description || 'No description provided'}
             </p>
           </div>
->>>>>>> 220ba6f (design updated)
           
           {project.location && (
             <div>
@@ -183,7 +153,7 @@ const ProjectCard = ({ project }) => {
             </div>
           )}
 
-<<<<<<< HEAD
+          {/* RESOLUTION: Keeping the Admin Response block if it exists */}
           {project.adminResponse && (
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-1">Admin Response</h4>
@@ -197,9 +167,7 @@ const ProjectCard = ({ project }) => {
               </div>
             </div>
           )}
-
-=======
->>>>>>> 220ba6f (design updated)
+          
           {project.updatedAt && (
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-1">Last Updated</h4>
@@ -228,7 +196,8 @@ export default function Projects() {
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
-
+  
+  // Removed forceRender state and useEffect block
 
   // Real-time data update callback
   const handleDataUpdate = useCallback((newProjects) => {
@@ -242,18 +211,6 @@ export default function Projects() {
   useEffect(() => {
     fetchProjects();
   }, []);
-
-<<<<<<< HEAD
-  // Force re-render when projects change
-  const [forceRender, setForceRender] = useState(0);
-  useEffect(() => {
-    if (projects.length > 0) {
-      setForceRender(prev => prev + 1);
-    }
-  }, [projects]);
-
-=======
->>>>>>> 220ba6f (design updated)
 
   const fetchProjects = async () => {
     setLoading(true);
@@ -277,67 +234,43 @@ export default function Projects() {
     }
   };
 
-<<<<<<< HEAD
-  // Simple filtering without useMemo
-=======
->>>>>>> 220ba6f (design updated)
   const filteredProjects = projects.filter(project => {
     const matchesFilter = filter === 'all' || project.status === filter;
-    const matchesSearch = searchTerm === '' || 
-                         (project.title && project.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
-<<<<<<< HEAD
-                         (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (project.location && project.location.toLowerCase().includes(searchTerm.toLowerCase()));
-=======
-                         (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    // Debug logging
-    console.log('Filtering project:', {
-      id: project._id,
-      title: project.title,
-      status: project.status,
-      matchesFilter,
-      matchesSearch,
-      filter,
-      searchTerm
-    });
->>>>>>> 220ba6f (design updated)
+    // RESOLUTION: Combine search logic to be comprehensive
+    const searchString = (
+      project.requirements?.campusName + ' ' +
+      project.title + ' ' +
+      project.description + ' ' +
+      project.location
+    ).toLowerCase();
+
+    const matchesSearch = searchTerm === '' || searchString.includes(searchTerm.toLowerCase());
     
     return matchesFilter && matchesSearch;
   });
 
-<<<<<<< HEAD
-=======
-  console.log('Projects count:', projects.length);
-  console.log('Filtered projects count:', filteredProjects.length);
-  console.log('Current filter:', filter);
-  console.log('Search term:', searchTerm);
->>>>>>> 220ba6f (design updated)
+  // RESOLUTION: Keeping the comprehensive list of statuses for the filter UI
+  const statusCounts = useMemo(() => {
+    const counts = { all: projects.length };
+    const allStatuses = [
+      'New', 'Assigned', 'Design In Progress', 'Design Submitted', 'Awaiting Client Review', 
+      'Installation In Progress', 'Completed', 'Rejected'
+    ];
 
+    allStatuses.forEach(status => {
+      counts[status] = projects.filter(p => p.status === status).length;
+    });
+    return counts;
+  }, [projects]);
 
-  const statusCounts = {
-    all: projects.length,
-    New: projects.filter(p => p.status === 'New').length,
-<<<<<<< HEAD
-    'In Progress': projects.filter(p => p.status === 'In Progress').length,
-=======
->>>>>>> 220ba6f (design updated)
-    Assigned: projects.filter(p => p.status === 'Assigned').length,
-    'Design In Progress': projects.filter(p => p.status === 'Design In Progress').length,
-    'Installation In Progress': projects.filter(p => p.status === 'Installation In Progress').length,
-    Completed: projects.filter(p => p.status === 'Completed').length,
-  };
 
   if (loading) {
     return <LoadingSpinner />;
   }
 
   return (
-<<<<<<< HEAD
-    <div key={forceRender} className="max-w-7xl mx-auto p-6">
-=======
     <div className="max-w-7xl mx-auto p-6">
->>>>>>> 220ba6f (design updated)
       <div className="mb-8">
         <div className="flex justify-between items-center">
           <div>
@@ -385,7 +318,7 @@ export default function Projects() {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            {Object.keys(statusCounts).map(status => (
+            {Object.keys(statusCounts).filter(s => statusCounts[s] > 0 || s === filter).map(status => (
               <button
                 key={status}
                 onClick={() => setFilter(status)}
@@ -405,10 +338,6 @@ export default function Projects() {
 
       {/* Projects List */}
       <div className="space-y-4">
-<<<<<<< HEAD
-        
-=======
->>>>>>> 220ba6f (design updated)
         {filteredProjects.length === 0 ? (
           <div className="card text-center py-12">
             <div className="text-gray-500">

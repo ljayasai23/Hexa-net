@@ -1,63 +1,92 @@
 import { useRouter } from 'next/router';
-import Link from 'next/link';
-<<<<<<< HEAD
 import { useState, useEffect } from 'react';
-import { requestsAPI } from '../../lib/api';
-import { toast } from 'react-hot-toast';
+import Link from 'next/link';
+import { requestsAPI, designsAPI } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
+import toast from 'react-hot-toast';
 import LoadingSpinner from '../../components/LoadingSpinner';
-=======
->>>>>>> 220ba6f (design updated)
 
 export default function ProjectDetail() {
   const router = useRouter();
   const { id } = router.query;
-<<<<<<< HEAD
-  const [project, setProject] = useState(null);
+  const { user } = useAuth();
+  const [request, setRequest] = useState(null);
+  const [design, setDesign] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [refreshToggle, setRefreshToggle] = useState(false);
 
-  useEffect(() => {
-    if (router.isReady && id) {
-      fetchProject();
-    }
-  }, [router.isReady, id]);
-
-  const fetchProject = async () => {
+  const fetchData = async () => {
+    if (!id) return;
     setLoading(true);
     try {
-      const response = await requestsAPI.getById(id);
-      const projectData = response.data.request || response.data;
-      setProject(projectData);
+      // 1. Fetch Request
+      const requestResponse = await requestsAPI.getById(id);
+      const req = requestResponse.data.request;
+      setRequest(req);
+      
+      // 2. Fetch Design (if design exists)
+      if (req.design) {
+        const designResponse = await designsAPI.getByRequest(id); 
+        setDesign(designResponse.data.design);
+      }
     } catch (error) {
-      console.error('Failed to fetch project:', error);
-      toast.error('Failed to load project details');
+      toast.error('Failed to fetch project data. It may not exist or you lack permission.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (router.isFallback || loading) {
-    return <LoadingSpinner />;
-  }
+  useEffect(() => {
+    if (router.isReady && id && user) {
+      fetchData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady, id, user, refreshToggle]);
 
-  if (!project) {
+  const handleClientAccept = async () => {
+    // Reality check: Warn user if they proceed without confirming PDF link is okay
+    if (!design?.reportPdfUrl) {
+      toast.error('Cannot accept: PDF report is missing or did not load.');
+      return;
+    }
+    
+    setIsAccepting(true);
+    try {
+      await requestsAPI.markClientComplete(request._id);
+      toast.success('Design accepted! Project marked as Completed.');
+      setRefreshToggle(p => !p); // Refresh data
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to mark as accepted.');
+    } finally {
+      setIsAccepting(false);
+    }
+  };
+
+  if (!router.isReady || loading) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Project Not Found</h1>
-          <p className="text-gray-600 mb-6">The project you're looking for doesn't exist or you don't have permission to view it.</p>
-          <Link href="/projects" className="btn btn-primary">
-            Back to Projects
-          </Link>
-        </div>
-      </div>
+        <LoadingSpinner />
     );
-=======
-
-  if (router.isFallback) {
-    return <div>Loading...</div>;
->>>>>>> 220ba6f (design updated)
+  }
+  
+  if (!request) {
+      // KEEPING the robust handling for missing projects
+      return <div className="max-w-4xl mx-auto p-6 text-red-600">Project data not found or inaccessible.</div>;
   }
 
+  // --- Client Acceptance View Logic ---
+  // RESOLUTION: Safest client/user ID comparison (Prevents the crash)
+  const isClient = user?.role === 'Client' && (request?.client?._id?.toString() === user?._id?.toString());
+  
+  const showAcceptView = isClient && request.status === 'Awaiting Client Review';
+  
+  // RESOLUTION: Corrected pdfUrl construction
+  const pdfUrl = design?.reportPdfUrl 
+    ? `${process.env.NEXT_PUBLIC_API_URL.replace('/api', '')}${design.reportPdfUrl}` 
+    : null;
+  // ------------------------------------
+
+  // RESOLUTION: Combining the best parts of the conflicting JSX blocks
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-8">
@@ -67,261 +96,68 @@ export default function ProjectDetail() {
           </svg>
           Back to Projects
         </Link>
-<<<<<<< HEAD
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {project.requirements?.campusName || project.title || 'Project Details'}
-            </h1>
-            <p className="text-gray-600">
-              Project ID: {id}
-            </p>
-          </div>
-          <button
-            onClick={fetchProject}
-            className="btn-secondary flex items-center space-x-2"
-            title="Refresh project data"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Refresh</span>
-          </button>
-        </div>
-=======
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Project Details
+          Project: {request.requirements?.campusName || 'Details'}
         </h1>
         <p className="text-gray-600">
           Project ID: {id}
         </p>
->>>>>>> 220ba6f (design updated)
       </div>
 
       <div className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Project Information</h2>
         <div className="space-y-4">
-          <div>
-<<<<<<< HEAD
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Campus Name</h4>
-            <p className="text-sm text-gray-600">{project.requirements?.campusName || 'N/A'}</p>
-          </div>
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Request Type</h4>
-            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-              project.requestType === 'Design Only' ? 'bg-blue-100 text-blue-800' :
-              project.requestType === 'Installation Only' ? 'bg-green-100 text-green-800' :
-              project.requestType === 'Both Design and Installation' ? 'bg-purple-100 text-purple-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {project.requestType || 'N/A'}
-            </span>
-          </div>
-          {project.description && (
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
-              <p className="text-sm text-gray-600">{project.description}</p>
-            </div>
-          )}
+          
+          {/* Status Display */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-1">Status</h4>
-            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-              project.status === 'New' ? 'bg-blue-100 text-blue-800' :
-              project.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
-              project.status === 'Completed' ? 'bg-green-100 text-green-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {project.status || 'Unknown'}
-            </span>
-          </div>
-          {project.description && (
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
-              <p className="text-sm text-gray-600">{project.description}</p>
-            </div>
-          )}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Created</h4>
-            <p className="text-sm text-gray-600">
-              {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'N/A'}
-            </p>
-=======
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Project ID</h4>
-            <p className="text-sm text-gray-600 font-mono">{id}</p>
-          </div>
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Status</h4>
-            <p className="text-sm text-gray-600">This is a test project detail page</p>
->>>>>>> 220ba6f (design updated)
-          </div>
-        </div>
-      </div>
-
-<<<<<<< HEAD
-      {/* Progress Section */}
-      <div className="card mt-6 border-2 border-primary-200 bg-gradient-to-r from-primary-50 to-blue-50">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">📊 Project Progress</h2>
-          <div className="text-right">
-            <div className="text-3xl font-bold text-primary-600">{project?.progress || 0}%</div>
-            <div className="text-sm text-gray-600">Complete</div>
-          </div>
-        </div>
-        <div className="space-y-6">
-          {/* Main Progress Bar */}
-          <div>
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-lg font-medium text-gray-700">Overall Progress</span>
-              <span className="text-lg font-bold text-primary-600">{project?.progress || 0}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-6 relative overflow-hidden shadow-inner">
-              <div 
-                className="bg-gradient-to-r from-primary-500 to-primary-600 h-6 rounded-full transition-all duration-500 ease-out relative shadow-lg"
-                style={{ width: `${Math.max(0, Math.min(100, project?.progress || 0))}%` }}
-              >
-                <div className="absolute inset-0 bg-white opacity-30 animate-pulse"></div>
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-50 animate-pulse"></div>
-              </div>
-            </div>
-            <div className="flex justify-between text-xs text-gray-500 mt-2">
-              <span>0%</span>
-              <span>25%</span>
-              <span>50%</span>
-              <span>75%</span>
-              <span>100%</span>
-            </div>
-          </div>
-
-          {/* Progress Steps */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className={`p-4 rounded-lg border-2 ${
-              (project.progress || 0) >= 0 ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'
-            }`}>
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  (project.progress || 0) >= 0 ? 'bg-green-500' : 'bg-gray-300'
-                }`}></div>
-                <span className="text-sm font-medium">Project Submitted</span>
-              </div>
-            </div>
-
-            <div className={`p-4 rounded-lg border-2 ${
-              (project.progress || 0) >= 20 ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'
-            }`}>
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  (project.progress || 0) >= 20 ? 'bg-green-500' : 'bg-gray-300'
-                }`}></div>
-                <span className="text-sm font-medium">Assigned</span>
-              </div>
-            </div>
-
-            <div className={`p-4 rounded-lg border-2 ${
-              (project.progress || 0) >= 50 ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'
-            }`}>
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  (project.progress || 0) >= 50 ? 'bg-green-500' : 'bg-gray-300'
-                }`}></div>
-                <span className="text-sm font-medium">Design Complete</span>
-              </div>
-            </div>
-
-            <div className={`p-4 rounded-lg border-2 ${
-              (project.progress || 0) >= 100 ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'
-            }`}>
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  (project.progress || 0) >= 100 ? 'bg-green-500' : 'bg-gray-300'
-                }`}></div>
-                <span className="text-sm font-medium">Completed</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Status Information */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-2">
-              <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-sm font-medium text-blue-900">Current Status</span>
-            </div>
-            <p className="text-sm text-blue-800">
-              {project.status === 'New' && 'Your project has been submitted and is awaiting review.'}
-              {project.status === 'Assigned' && 'Your project has been assigned to a designer and work is beginning.'}
-              {project.status === 'Design In Progress' && 'The design phase is currently in progress.'}
-              {project.status === 'Design Complete' && 'The design phase has been completed.'}
-              {project.status === 'Installation In Progress' && 'Installation is currently in progress.'}
-              {project.status === 'Completed' && 'Your project has been completed successfully!'}
+            <p className={`text-lg font-bold ${request.status === 'Awaiting Client Review' ? 'text-teal-600' : 'text-gray-600'}`}>
+              {request.status}
             </p>
           </div>
-        </div>
-      </div>
-
-
-      {/* Admin Response Section */}
-      {project.adminResponse && (
-        <div className="card mt-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Admin Response</h2>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-gray-700">{project.adminResponse}</p>
-            {project.adminResponseDate && (
-              <p className="text-xs text-gray-500 mt-2">
-                Response Date: {new Date(project.adminResponseDate).toLocaleDateString()}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Project Timeline */}
-      <div className="card mt-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Project Timeline</h2>
-        <div className="space-y-3">
-          <div className="flex items-center">
-            <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">Project Submitted</p>
-              <p className="text-xs text-gray-500">
-                {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'N/A'}
-              </p>
-            </div>
-          </div>
           
-          {project.adminResponse && (
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">Admin Response</p>
-                <p className="text-xs text-gray-500">
-                  {project.adminResponseDate ? new Date(project.adminResponseDate).toLocaleDateString() : 'N/A'}
-                </p>
+          {/* --- CRITICAL: CLIENT ACCEPTANCE SECTION (The PDF/Accept buttons) --- */}
+          {showAcceptView && pdfUrl && (
+            <div className="bg-green-50 border-l-4 border-green-400 p-4 mt-6">
+              <h4 className="text-md font-bold text-green-800 mb-2">Action Required: Review Design Report</h4>
+              <p className="text-sm text-green-700 mb-4">The Admin has approved the final design. Please review the attached PDF report.</p>
+              
+              <div className="flex items-center space-x-3">
+                <a 
+                    href={pdfUrl}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                    View & Download Approved PDF
+                </a>
+                
+                <button
+                  onClick={handleClientAccept}
+                  disabled={isAccepting}
+                  className="btn-primary bg-green-600 hover:bg-green-700"
+                >
+                  {isAccepting ? 'Accepting...' : 'Design Accepted'}
+                </button>
               </div>
             </div>
           )}
+          {/* ------------------------------------------------------------------ */}
           
-          {project.status === 'Completed' && (
-            <div className="flex items-center">
-              <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+          {/* Original Project Details (Resolved to be clean) */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
+            <p className="text-sm text-gray-600">{request.description || 'N/A'}</p>
+          </div>
+          
+          {/* Display Design Notes from Admin/Designer if available */}
+          {design?.designNotes && (
               <div>
-                <p className="text-sm font-medium text-gray-900">Project Completed</p>
-                <p className="text-xs text-gray-500">
-                  {project.completedAt ? new Date(project.completedAt).toLocaleDateString() : 'N/A'}
-                </p>
+                  <h4 className="text-sm font-medium text-gray-700 mb-1">Admin/Designer Notes</h4>
+                  <p className="text-sm text-gray-600 italic border-l-2 border-gray-300 pl-2">{design.designNotes}</p>
               </div>
-            </div>
           )}
-=======
-      <div className="card mt-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Debug Information</h2>
-        <div className="space-y-2">
-          <p className="text-sm text-gray-600">Router Ready: {router.isReady ? 'Yes' : 'No'}</p>
-          <p className="text-sm text-gray-600">Project ID: {id || 'Not available'}</p>
-          <p className="text-sm text-gray-600">Query: {JSON.stringify(router.query)}</p>
-          <p className="text-sm text-gray-600">Pathname: {router.pathname}</p>
-          <p className="text-sm text-gray-600">AsPath: {router.asPath}</p>
->>>>>>> 220ba6f (design updated)
+          
         </div>
       </div>
     </div>

@@ -1,11 +1,16 @@
 const express = require('express');
+const { generateDesign } = require('../services/designService');
+const { generatePdfReport } = require('../services/pdfService');
+// --- NEW IMPORT ---
+const { createNotification } = require('../services/notificationService');
+const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { body, validationResult } = require('express-validator');
 const Request = require('../models/Request');
 const LogicDesign = require('../models/LogicDesign');
 const Device = require('../models/Device');
 const { auth, authorize } = require('../middleware/auth');
-const { generateDesign } = require('../services/designService');
-const { generatePdfReport } = require('../services/pdfService');
+ // <--- CRITICAL FIX
 
 const router = express.Router();
 
@@ -169,7 +174,16 @@ router.put('/admin-approve/:id', [
     );
 
     // 3. Logic to notify Client (omitted for brevity)
-    
+    // 3. Notify the Client
+    if (updatedRequest.client) {
+      await createNotification({
+          user: updatedRequest.client,
+          request: updatedRequest._id,
+          type: 'design_approved',
+          title: '🟢 Admin Approved Design Report',
+          message: `The design report for project ${updatedRequest._id.toString().slice(-4)} has been approved. Please review and accept.`
+      });
+  }
     res.json({
       message: 'Design approved and forwarded to Client successfully',
       design,
@@ -216,7 +230,18 @@ router.put('/submit/:id', [
     );
     
     // Logic to send a notification to the Web Admin (omitted for brevity)
-
+    // 3. Notify the Web Admin
+    const webAdmins = await User.find({ role: 'Web Admin' });
+    if (webAdmins.length > 0) {
+        // Notify all admins
+        await Promise.all(webAdmins.map(admin => createNotification({
+            user: admin._id,
+            request: updatedRequest._id,
+            type: 'design_review',
+            title: '🟢 New Design Report Received',
+            message: `Report for project ${design.request._id.toString().slice(-4)} submitted by ${req.user.name} for your review.`
+        })));
+    }
     res.json({
       message: 'Design submitted for Admin review successfully',
       request: updatedRequest
