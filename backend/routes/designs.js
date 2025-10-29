@@ -5,6 +5,7 @@ const LogicDesign = require('../models/LogicDesign');
 const Device = require('../models/Device');
 const { auth, authorize } = require('../middleware/auth');
 const { generateDesign } = require('../services/designService');
+const { generatePdfReport } = require('../services/pdfService');
 
 const router = express.Router();
 
@@ -44,14 +45,34 @@ router.post('/generate/:requestId', [
 
     await logicDesign.save();
 
+    await logicDesign.populate('billOfMaterials.device');
+    const designer = req.user; // Assuming req.user is populated by 'auth' middleware
+    const pdfUrl = await generatePdfReport(logicDesign, request, designer);
+    
+    // 3. Update the LogicDesign with the PDF URL
+    logicDesign.reportPdfUrl = pdfUrl;
+    await logicDesign.save();
     // Update the request with the design reference
-    request.design = logicDesign._id;
-    request.status = 'Design In Progress';
-    await request.save();
+    // New/Corrected Code (Prevents validation errors by using a direct update)
+    // Update the request with the design reference and new status
+    const updatedRequest = await Request.findByIdAndUpdate(
+      request._id,
+      { 
+          design: logicDesign._id,
+          status: 'Design In Progress'
+      },
+      { new: true } // Return the updated document
+  );
+  
+  if (!updatedRequest) {
+      // Handle unexpected failure to update request
+      return res.status(500).json({ message: 'Design generated, but failed to update main request status.' });
+  }
 
     // Populate the design data for response
     await logicDesign.populate('billOfMaterials.device');
 
+  const finalDesign = logicDesign.toObject({ getters: true }); 
     res.status(201).json({
       message: 'Design generated successfully',
       design: logicDesign
@@ -95,75 +116,12 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
-=======
 // @route   PUT /api/designs/:id
 // @desc    Update a specific design (BOM, IP Plan, Diagram Syntax)
 // @access  Private (Network Designer only)
-router.put('/:id', [
+router.put('/admin-approve/:id', [
   auth,
-  authorize('Network Designer'),
-  body('billOfMaterials').optional().isArray().withMessage('BOM must be an array'),
-  body('ipPlan').optional().isArray().withMessage('IP Plan must be an array'),
-  body('topologyDiagram').optional().isString().withMessage('Topology diagram must be a string'),
-  body('totalEstimatedCost').optional().isNumeric().withMessage('Total cost must be a number')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        message: 'Validation failed', 
-        errors: errors.array() 
-      });
-    }
-
-    const { billOfMaterials, ipPlan, topologyDiagram, totalEstimatedCost } = req.body;
-    const design = await LogicDesign.findById(req.params.id).populate('request');
-
-    if (!design) {
-      return res.status(404).json({ message: 'Design not found' });
-    }
-
-    // Check assignment and approval status
-    if (design.request.assignedDesigner?.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Access denied. You are not assigned to this request.' });
-    }
-    if (design.isApproved) {
-      return res.status(400).json({ message: 'Cannot edit an approved design.' });
-    }
-
-    // Prepare update object
-    const updateFields = {};
-    if (billOfMaterials) updateFields.billOfMaterials = billOfMaterials;
-    if (ipPlan) updateFields.ipPlan = ipPlan;
-    if (topologyDiagram) updateFields.topologyDiagram = topologyDiagram;
-    if (totalEstimatedCost) updateFields.totalEstimatedCost = totalEstimatedCost;
-    
-    // Perform update
-    const updatedDesign = await LogicDesign.findByIdAndUpdate(
-      req.params.id,
-      updateFields,
-      { new: true, runValidators: true }
-    ).populate('billOfMaterials.device');
-
-    res.json({
-      message: 'Design updated successfully (Draft Saved)',
-      design: updatedDesign
-    });
-  } catch (error) {
-    console.error('Update design error:', error);
-    res.status(500).json({ message: 'Server error updating design' });
-  }
-});
-
-
->>>>>>> 220ba6f (design updated)
-// @route   PUT /api/designs/:id/approve
-// @desc    Approve a design
-// @access  Private (Network Designer only)
-router.put('/:id/approve', [
-  auth,
-  authorize('Network Designer'),
+  authorize('Web Admin'), // <--- ONLY ADMIN CAN DO THIS NOW
   body('designNotes').optional().isString().withMessage('Design notes must be a string')
 ], async (req, res) => {
   try {
@@ -181,63 +139,95 @@ router.put('/:id/approve', [
     if (!design) {
       return res.status(404).json({ message: 'Design not found' });
     }
-
-    // Check if designer is assigned to this request
-    if (design.request.assignedDesigner?.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Access denied. You are not assigned to this request.' });
+    if (!design.reportPdfUrl) {
+        return res.status(400).json({ message: 'Cannot approve: PDF report is missing.' });
     }
-<<<<<<< HEAD
-
-    // Update design
-=======
     
-    // Check if it's already approved
+    // Check if the request is in the correct status to be approved
+    if (design.request.status !== 'Design Submitted') {
+        return res.status(400).json({ message: 'Design is not currently submitted for review.' });
+    }
     if (design.isApproved) {
         return res.status(400).json({ message: 'Design is already approved.' });
     }
 
-    // Update design document fields
->>>>>>> 220ba6f (design updated)
+    // 1. Update design document fields (Approval)
     design.isApproved = true;
     design.approvedBy = req.user._id;
     design.approvedAt = new Date();
     if (designNotes) {
       design.designNotes = designNotes;
     }
-
-<<<<<<< HEAD
-    await design.save();
-
-    // Update request status
-    design.request.status = 'Design Complete';
-    await design.request.save();
-=======
-    // Save the updated design document
     await design.save(); 
 
-    // FIX: Update the Request status directly using findByIdAndUpdate for reliability
+    // 2. Update the Request status to be reviewed by the client
     const requestId = design.request._id;
     const updatedRequest = await Request.findByIdAndUpdate(
         requestId,
-        { status: 'Design Complete' },
+        { status: 'Awaiting Client Review' }, // <--- NEW STATUS: Forwarded to Client
         { new: true }
     );
 
-    if (!updatedRequest) {
-        return res.status(504).json({ message: 'Design approved, but failed to update main request status.' });
-    }
->>>>>>> 220ba6f (design updated)
-
+    // 3. Logic to notify Client (omitted for brevity)
+    
     res.json({
-      message: 'Design approved successfully',
-      design
+      message: 'Design approved and forwarded to Client successfully',
+      design,
+      request: updatedRequest
     });
   } catch (error) {
-    console.error('Approve design error:', error);
+    console.error('Admin approve design error:', error);
     res.status(500).json({ message: 'Server error approving design' });
   }
 });
 
+// @route   PUT /api/designs/:id/approve
+// @desc    Approve a design
+// @access  Private (Network Designer only)
+// backend/routes/designs.js (Add this at the end of the file, before module.exports)
+
+// @route   PUT /api/designs/submit/:id
+// @desc    Designer submits the design (and PDF) for Admin approval
+// @access  Private (Network Designer only)
+router.put('/submit/:id', [
+  auth,
+  authorize('Network Designer')
+], async (req, res) => {
+  try {
+    const design = await LogicDesign.findById(req.params.id).populate('request');
+
+    if (!design) {
+      return res.status(404).json({ message: 'Design not found' });
+    }
+    if (!design.reportPdfUrl) {
+        return res.status(400).json({ message: 'PDF report is missing. Please regenerate the design.' });
+    }
+    
+    // Check assignment
+    if (design.request.assignedDesigner?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied. You are not assigned to this request.' });
+    }
+
+    // Update the request status
+    const updatedRequest = await Request.findByIdAndUpdate(
+        design.request._id,
+        { status: 'Design Submitted' },
+        { new: true }
+    );
+    
+    // Logic to send a notification to the Web Admin (omitted for brevity)
+
+    res.json({
+      message: 'Design submitted for Admin review successfully',
+      request: updatedRequest
+    });
+  } catch (error) {
+    console.error('Submit design error:', error);
+    res.status(500).json({ message: 'Server error submitting design' });
+  }
+});
+
+// ... (Modify the old 'approve' route to be a NEW 'admin-approve' route)
 // @route   GET /api/designs/request/:requestId
 // @desc    Get design for a specific request
 // @access  Private
@@ -270,8 +260,4 @@ router.get('/request/:requestId', auth, async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
 module.exports = router;
-=======
-module.exports = router;
->>>>>>> 220ba6f (design updated)

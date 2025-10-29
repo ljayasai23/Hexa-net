@@ -14,11 +14,12 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
   const handleGenerateDesign = async (requestId) => {
     setLoading(true);
     try {
+      // NOTE: PDF is generated and saved on the backend here (designs.js POST route)
       const response = await designsAPI.generate(requestId);
       setDesign(response.data.design);
       setShowDesignModal(true);
       onRequestUpdated();
-      toast.success('Design generated successfully!');
+      toast.success('Design generated and PDF created!');
     } catch (error) {
       toast.error('Failed to generate design');
     } finally {
@@ -26,16 +27,20 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
     }
   };
 
-  const handleApproveDesign = async (designId, notes) => {
+  // --- MODIFIED: Renamed and logic changed for submission ---
+  const handleSubmitDesign = async (designId, notes) => {
     try {
-      await designsAPI.approve(designId, notes);
-      toast.success('Design approved successfully!');
+      // The notes are NOT required by the submission endpoint, but we can send them for update if needed
+      // Here, we only call the submitForReview endpoint (which only needs the Design ID in the path)
+      await designsAPI.submitForReview(designId); 
+      toast.success('Design report submitted to Admin for review!');
       setShowDesignModal(false);
       onRequestUpdated();
     } catch (error) {
-      toast.error('Failed to approve design');
+      toast.error(error.response?.data?.message || 'Failed to submit design');
     }
   };
+  // ---------------------------------------------------------
 
   const handleViewDesign = async (requestId) => {
     setLoading(true);
@@ -82,6 +87,7 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
                     request.status === 'Assigned' ? 'bg-blue-100 text-blue-800' :
                     request.status === 'Design In Progress' ? 'bg-purple-100 text-purple-800' :
                     request.status === 'Design Complete' ? 'bg-green-100 text-green-800' :
+                    request.status === 'Design Submitted' ? 'bg-orange-100 text-orange-800' : // <-- NEW STATUS COLOR
                     'bg-gray-100 text-gray-800'
                   }`}>
                     {request.status}
@@ -115,7 +121,9 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
       {showDesignModal && design && (
         <DesignModal
           design={design}
-          onApprove={handleApproveDesign}
+          // --- MODIFIED PROP NAME ---
+          onSubmit={handleSubmitDesign} 
+          // --------------------------
           onClose={() => setShowDesignModal(false)}
         />
       )}
@@ -123,18 +131,39 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
   );
 }
 
-const DesignModal = ({ design, onApprove, onClose }) => {
+// --- MODIFIED DesignModal Component ---
+const DesignModal = ({ design, onSubmit, onClose }) => { // Changed prop from onApprove to onSubmit
   const [notes, setNotes] = useState('');
-  const [isApproving, setIsApproving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Changed state name
 
-  const handleApprove = async () => {
-    setIsApproving(true);
+  const handleSubmit = async () => { // Changed handler name
+    // The design is considered "ready" if it exists and hasn't been submitted yet.
+    if (design.request.status === 'Design Submitted') {
+        toast.error('Design already submitted for review.');
+        return;
+    }
+    
+    setIsSubmitting(true);
     try {
-      await onApprove(design._id, notes);
+      await onSubmit(design._id, notes);
     } finally {
-      setIsApproving(false);
+      setIsSubmitting(false);
     }
   };
+
+  // Determine the button visibility and text
+  let buttonText = 'Request to Admin';
+  let isActionVisible = false;
+
+  if (design.request.status === 'Design In Progress') {
+    // Designer is ready to submit
+    isActionVisible = true;
+  } else if (design.request.status === 'Design Submitted') {
+    // Already submitted, maybe designer wants to save a draft but not re-submit
+    buttonText = 'Submitted (Waiting Admin)';
+    isActionVisible = false; // Hide the active submission button
+  }
+
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -153,6 +182,8 @@ const DesignModal = ({ design, onApprove, onClose }) => {
           </div>
 
           <div className="space-y-6">
+            {/* ... (BOM, IP Plan, Topology remain the same) ... */}
+            
             {/* Bill of Materials */}
             <div>
               <h4 className="text-lg font-medium text-gray-900 mb-3">Bill of Materials</h4>
@@ -195,15 +226,17 @@ const DesignModal = ({ design, onApprove, onClose }) => {
               >
                 Close
               </button>
-              {!design.isApproved && (
+              {/* --- MODIFIED BUTTON LOGIC AND TEXT --- */}
+              {isActionVisible && (
                 <button
-                  onClick={handleApprove}
-                  disabled={isApproving}
-                  className="btn-primary"
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="btn-primary bg-indigo-600 hover:bg-indigo-700"
                 >
-                  {isApproving ? 'Approving...' : 'Approve Design'}
+                  {isSubmitting ? 'Submitting...' : buttonText}
                 </button>
               )}
+              {/* -------------------------------------- */}
             </div>
           </div>
         </div>

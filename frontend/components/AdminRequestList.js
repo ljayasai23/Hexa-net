@@ -230,3 +230,91 @@ const AssignModal = ({ request, users, onAssign, onClose }) => {
     </div>
   );
 };
+const handleAdminApprove = async (designId) => {
+  try {
+      await designsAPI.adminApprove(designId);
+      toast.success('Design approved and sent to Client!');
+      setShowApproveModal(false);
+      setSelectedRequest(null);
+      fetchData(); // Refresh list
+  } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to approve design');
+  }
+}
+// -----------------------------------------------------------------
+
+// --- NEW MODAL COMPONENT (Add this outside the main component) ---
+const ApproveDesignModal = ({ request, onApprove, onClose }) => {
+const [design, setDesign] = useState(null);
+const [loadingDesign, setLoadingDesign] = useState(true);
+
+useEffect(() => {
+  const fetchDesign = async () => {
+    try {
+      const response = await designsAPI.getByRequest(request._id);
+      setDesign(response.data.design);
+    } catch (error) {
+      toast.error('Could not fetch design details.');
+      onClose();
+    } finally {
+      setLoadingDesign(false);
+    }
+  };
+  fetchDesign();
+}, [request._id, onClose]);
+
+const handleApproveClick = () => {
+    if (design?._id) {
+        onApprove(design._id);
+    } else {
+        toast.error('Design ID not found.');
+    }
+}
+
+return (
+  <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div className="relative top-20 mx-auto p-8 border w-3/4 max-w-2xl shadow-lg rounded-md bg-white">
+      <h3 className="text-xl font-medium text-gray-900 mb-4">
+        Review Design Report: {request.requirements.campusName}
+      </h3>
+      
+      {loadingDesign ? (
+          <LoadingSpinner />
+      ) : design && design.reportPdfUrl ? (
+        <div className="space-y-4">
+          <p><strong>Status:</strong> Submitted for Review</p>
+          
+          <a 
+              href={`${process.env.NEXT_PUBLIC_API_URL}${design.reportPdfUrl}`} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+              <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+              Download & Review PDF
+          </a>
+
+          <div className="flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-secondary"
+            >
+              Cancel / Close
+            </button>
+            <button
+              type="button"
+              onClick={handleApproveClick}
+              className="btn-primary bg-green-600 hover:bg-green-700"
+            >
+              Approve & Forward to Client
+            </button>
+          </div>
+        </div>
+      ) : (
+          <p className="text-red-600">Error: Design or PDF URL is missing.</p>
+      )}
+    </div>
+  </div>
+);
+};

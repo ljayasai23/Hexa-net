@@ -16,14 +16,10 @@ export default function RequestForm({ onSuccess, onCancel }) {
       ],
       additionalRequirements: ''
     },
-<<<<<<< HEAD
     priority: 'Medium',
     description: '',
     requestType: 'Both Design and Installation',
     uploadedFiles: []
-=======
-    priority: 'Medium'
->>>>>>> 220ba6f (design updated)
   });
   // const [isSubmitting, setIsSubmitting] = useState(false); // <-- 2. REMOVED THIS STATE
 
@@ -54,7 +50,6 @@ export default function RequestForm({ onSuccess, onCancel }) {
     });
   };
 
-<<<<<<< HEAD
   const handleDescriptionChange = (e) => {
     setFormData({
       ...formData,
@@ -92,8 +87,6 @@ export default function RequestForm({ onSuccess, onCancel }) {
     });
   };
 
-=======
->>>>>>> 220ba6f (design updated)
   const addDepartment = () => {
     setFormData({
       ...formData,
@@ -193,7 +186,6 @@ export default function RequestForm({ onSuccess, onCancel }) {
       return;
     }
 
-<<<<<<< HEAD
     if (!formData.description.trim()) {
       toast.error('Project description is required');
       return;
@@ -210,8 +202,6 @@ export default function RequestForm({ onSuccess, onCancel }) {
       return;
     }
 
-=======
->>>>>>> 220ba6f (design updated)
     const hasValidDepartments = formData.requirements.departments.every(dept => 
       dept.name.trim() && dept.rooms.some(room => room.name.trim())
     );
@@ -273,7 +263,6 @@ export default function RequestForm({ onSuccess, onCancel }) {
         </div>
       </div>
 
-<<<<<<< HEAD
       {/* Request Type Field */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -371,8 +360,6 @@ export default function RequestForm({ onSuccess, onCancel }) {
         </p>
       </div>
 
-=======
->>>>>>> 220ba6f (design updated)
       <div>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium text-gray-900">Departments & Rooms</h3>

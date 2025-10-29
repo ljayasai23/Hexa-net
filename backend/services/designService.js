@@ -1,9 +1,6 @@
-<<<<<<< HEAD
-const ipSubnetCalculator = require('ip-subnet-calculator');
-
-=======
-const { Netmask } = require('netmask');
->>>>>>> 220ba6f (design updated)
+const { Netmask } = require('netmask'); // FIX 1: Switched to the stable Netmask library
+const Device = require('../models/Device');
+// --- IP Conversion Helpers (Define at the top)
 // Generate logical design based on request requirements
 const generateDesign = async (request) => {
   try {
@@ -13,22 +10,13 @@ const generateDesign = async (request) => {
     const departmentHosts = aggregateHostsByDepartment(requirements.departments);
     
     // Step 2: Calculate required hardware
-<<<<<<< HEAD
     const billOfMaterials = await calculateHardwareRequirements(departmentHosts);
     
     // Step 3: Generate IP plan with VLANs and subnets
     const ipPlan = generateIPPlan(departmentHosts);
-=======
-    // NOTE: Requires Device.js model to be imported inside this function due to dependency loop
-    const billOfMaterials = await calculateHardwareRequirements(departmentHosts);
-    
-    // Step 3: Generate IP plan with VLANs and subnets
-    const ipPlan = generateIPPlan(departmentHosts); // <--- Call that failed
->>>>>>> 220ba6f (design updated)
     
     // Step 4: Generate topology diagram
-    const topologyDiagram = generateTopologyDiagram(departmentHosts, billOfMaterials);
-    
+    const topologyDiagram = generateTopologyDiagram(departmentHosts, billOfMaterials, ipPlan);    
     // Step 5: Calculate total cost
     const totalEstimatedCost = billOfMaterials.reduce((total, item) => total + item.totalCost, 0);
     
@@ -39,13 +27,8 @@ const generateDesign = async (request) => {
       totalEstimatedCost
     };
   } catch (error) {
-    console.error('Design generation error:', error);
-<<<<<<< HEAD
+    console.error('Design generation error (Final Check):', error);
     throw new Error('Failed to generate design');
-=======
-    // Modified to be less verbose in the logs
-    throw new Error('Failed to generate design'); 
->>>>>>> 220ba6f (design updated)
   }
 };
 
@@ -74,7 +57,6 @@ const aggregateHostsByDepartment = (departments) => {
 
 // Calculate hardware requirements
 const calculateHardwareRequirements = async (departmentHosts) => {
-  const Device = require('../models/Device');
   const billOfMaterials = [];
   
   // Get available devices
@@ -86,13 +68,20 @@ const calculateHardwareRequirements = async (departmentHosts) => {
   });
   
   // Calculate total hosts across all departments
-  const totalHosts = Object.values(departmentHosts).reduce((sum, dept) => sum + dept.totalHosts, 0);
   const totalWiredHosts = Object.values(departmentHosts).reduce((sum, dept) => sum + dept.wiredHosts, 0);
   const totalWirelessHosts = Object.values(departmentHosts).reduce((sum, dept) => sum + dept.wirelessHosts, 0);
+  const getDeviceData = (type) => {
+    const device = deviceMap[type] && deviceMap[type].length > 0 ? deviceMap[type][0] : null;
+    if (!device || !device._id || typeof device.unitPrice !== 'number' || device.unitPrice <= 0) {
+        console.warn(`WARNING: Skipping ${type} - Device not found or invalid price.`);
+        return null;
+    }
+    return device;
+  };
   
   // Core Router (1 per campus)
-  if (deviceMap.Router && deviceMap.Router.length > 0) {
-    const coreRouter = deviceMap.Router[0]; // Use first available router
+  const coreRouter = getDeviceData('Router');
+  if (coreRouter) {
     billOfMaterials.push({
       device: coreRouter._id,
       quantity: 1,
@@ -102,8 +91,8 @@ const calculateHardwareRequirements = async (departmentHosts) => {
   }
   
   // Core Switch (1 per campus)
-  if (deviceMap.CoreSwitch && deviceMap.CoreSwitch.length > 0) {
-    const coreSwitch = deviceMap.CoreSwitch[0];
+  const coreSwitch = getDeviceData('CoreSwitch');
+  if (coreSwitch) {
     billOfMaterials.push({
       device: coreSwitch._id,
       quantity: 1,
@@ -113,8 +102,8 @@ const calculateHardwareRequirements = async (departmentHosts) => {
   }
   
   // Distribution Switches (1 per department)
-  if (deviceMap.DistributionSwitch && deviceMap.DistributionSwitch.length > 0) {
-    const distSwitch = deviceMap.DistributionSwitch[0];
+  const distSwitch = getDeviceData('DistributionSwitch');
+  if (distSwitch) {
     const numDepartments = Object.keys(departmentHosts).length;
     billOfMaterials.push({
       device: distSwitch._id,
@@ -125,9 +114,9 @@ const calculateHardwareRequirements = async (departmentHosts) => {
   }
   
   // Access Switches (based on wired host count)
-  if (deviceMap.AccessSwitch && deviceMap.AccessSwitch.length > 0) {
-    const accessSwitch = deviceMap.AccessSwitch[0];
-    const portsPerSwitch = accessSwitch.specifications.portCount;
+  const accessSwitch = getDeviceData('AccessSwitch');
+  if (accessSwitch) {
+    const portsPerSwitch = accessSwitch.specifications.portCount || 48; // Use 48 as safe fallback
     const numAccessSwitches = Math.ceil(totalWiredHosts / portsPerSwitch);
     
     if (numAccessSwitches > 0) {
@@ -141,8 +130,8 @@ const calculateHardwareRequirements = async (departmentHosts) => {
   }
   
   // Access Points (based on wireless host count)
-  if (deviceMap.AccessPoint && deviceMap.AccessPoint.length > 0) {
-    const accessPoint = deviceMap.AccessPoint[0];
+  const accessPoint = getDeviceData('AccessPoint');
+  if (accessPoint) {
     const hostsPerAP = 30; // Assume 30 hosts per AP
     const numAccessPoints = Math.ceil(totalWirelessHosts / hostsPerAP);
     
@@ -160,59 +149,6 @@ const calculateHardwareRequirements = async (departmentHosts) => {
 };
 
 // Generate IP plan with VLANs and subnets
-<<<<<<< HEAD
-const generateIPPlan = (departmentHosts) => {
-  const ipPlan = [];
-  let vlanId = 10; // Start VLAN IDs from 10
-  const baseNetwork = '10.0.0.0/8'; // Use 10.0.0.0/8 as base network
-  
-  // Add management VLAN
-  ipPlan.push({
-    vlanId: 1,
-    departmentName: 'Management',
-    subnet: '10.1.1.0/24',
-    subnetMask: '255.255.255.0',
-    networkAddress: '10.1.1.0',
-    broadcastAddress: '10.1.1.255',
-    usableHosts: 254,
-    hostCount: 2
-  });
-  
-  // Add VLAN for each department
-  Object.entries(departmentHosts).forEach(([deptName, hosts]) => {
-    const requiredHosts = hosts.totalHosts + 10; // Add buffer for growth
-    
-    // Calculate subnet size based on host requirements
-    let subnetSize;
-    if (requiredHosts <= 2) subnetSize = 30; // /30 = 2 hosts
-    else if (requiredHosts <= 6) subnetSize = 29; // /29 = 6 hosts
-    else if (requiredHosts <= 14) subnetSize = 28; // /28 = 14 hosts
-    else if (requiredHosts <= 30) subnetSize = 27; // /27 = 30 hosts
-    else if (requiredHosts <= 62) subnetSize = 26; // /26 = 62 hosts
-    else if (requiredHosts <= 126) subnetSize = 25; // /25 = 126 hosts
-    else if (requiredHosts <= 254) subnetSize = 24; // /24 = 254 hosts
-    else if (requiredHosts <= 510) subnetSize = 23; // /23 = 510 hosts
-    else if (requiredHosts <= 1022) subnetSize = 22; // /22 = 1022 hosts
-    else if (requiredHosts <= 2046) subnetSize = 21; // /21 = 2046 hosts
-    else subnetSize = 20; // /20 = 4094 hosts
-    
-    // Calculate network address
-    const networkAddress = `10.${Math.floor(vlanId / 100)}.${vlanId % 100}.0/${subnetSize}`;
-    const subnetInfo = ipSubnetCalculator.calculateSubnetMask(networkAddress);
-    
-    ipPlan.push({
-      vlanId,
-      departmentName: deptName,
-      subnet: networkAddress,
-      subnetMask: subnetInfo.prefixSize ? 
-        ipSubnetCalculator.calculateCIDRPrefix(subnetInfo.prefixSize) : '255.255.255.0',
-      networkAddress: subnetInfo.ipLowStr,
-      broadcastAddress: subnetInfo.ipHighStr,
-      usableHosts: subnetInfo.numHosts - 2, // Subtract network and broadcast
-      hostCount: hosts.totalHosts
-    });
-    
-=======
 // Generate IP plan with VLANs and subnets
 // Generate IP plan with VLANs and subnets
 const generateIPPlan = (departmentHosts) => {
@@ -280,21 +216,14 @@ const generateIPPlan = (departmentHosts) => {
         
         // Increment to the next IP block (The Safest Non-Contiguous Way)
         octet3++; 
-        if (octet3 > 254) {
-            octet3 = 1;
-            octet2++;
-        }
-        if (octet2 > 254) {
-            // This is just a safeguard; you have a massive address space before this triggers.
-            throw new Error('IP address space exhausted (10.x.x.x limit).');
-        }
+        if (octet3 > 254) { octet3 = 1; octet2++; }
+        if (octet2 > 254) { console.error('IP address space exhausted.'); }
 
     } catch (err) {
         // If Netmask failed, log the specific error
         console.error(`ERROR: Subnet calculation failed for ${deptName}:`, err.message);
         throw new Error(`Failed to generate design: ${err.message}`);
     }
->>>>>>> 220ba6f (design updated)
     vlanId++;
   });
   
@@ -302,9 +231,44 @@ const generateIPPlan = (departmentHosts) => {
 };
 
 // Generate Mermaid topology diagram
-const generateTopologyDiagram = (departmentHosts, billOfMaterials) => {
-  const departments = Object.keys(departmentHosts);
-  
+const getHostRange = (ipPlan, deptName) => {
+  const ipEntry = ipPlan.find(ip => ip.departmentName === deptName);
+
+  if (!ipEntry || ipEntry.usableHosts < 1) {
+      console.warn(`[DEBUG-HOST]: Skipping ${deptName}. Hosts < 1 or entry missing.`);
+      return '';
+  }
+
+  try {
+    const netmask = new Netmask(ipEntry.subnet);
+
+    // --- FIX: Use correct Netmask properties to calculate host IPs ---
+    const baseOctets = netmask.base.split('.');
+    const broadcastOctets = netmask.broadcast.split('.');
+    
+    // First usable host: Increment the last octet of the network address (base)
+    const firstHost = `${baseOctets.slice(0, 3).join('.')}.${parseInt(baseOctets[3]) + 1}`;
+    
+    // Last usable host: Decrement the last octet of the broadcast address
+    const lastHost = `${broadcastOctets.slice(0, 3).join('.')}.${parseInt(broadcastOctets[3]) - 1}`;
+    // ------------------------------------------------------------------
+
+    if (netmask.size <= 2 || firstHost === lastHost) {
+         console.warn(`[DEBUG-HOST]: Invalid range calculated for ${deptName}. Size: ${netmask.size}.`);
+         return '';
+    }
+
+    console.log(`[DEBUG-HOST]: SUCCESS - ${deptName}: ${firstHost} - ${lastHost}`);
+    return `\nHost Range: ${firstHost} - ${lastHost}`; 
+
+} catch (e) {
+    console.error(`[CRITICAL DEBUG]: HOST RANGE FAILED FOR ${deptName} on Subnet ${ipEntry.subnet}`, e.message);
+    return `\nIP Range: CALCULATION ERROR`; 
+}
+};
+
+const generateTopologyDiagram = (departmentHosts, billOfMaterials, ipPlan) => {
+  const departments = Object.keys(departmentHosts); // Define departments here!
   let diagram = `graph TB
     %% Core Layer
     Router["Core Router<br/>10.1.1.1"]
@@ -317,8 +281,17 @@ const generateTopologyDiagram = (departmentHosts, billOfMaterials) => {
   // Add distribution switches for each department
   departments.forEach((dept, index) => {
     const distSwitchId = `Dist${index + 1}`;
-    const distSwitchName = `Distribution Switch ${index + 1}<br/>${dept}`;
-    
+    let hostRange = '';
+
+    try {
+        // CALL THE EXTERNAL HELPER, passing ipPlan and deptName
+        hostRange = getHostRange(ipPlan, dept); 
+    } catch (e) {
+        console.error(`ERROR: Failed to calculate host range for ${dept}:`, e.message);
+        hostRange = `<br/>IP Range: CALCULATION FAILED`;
+    }
+
+    const distSwitchName = `Distribution Switch ${index + 1}<br/>${dept}${hostRange}`;    
     diagram += `    ${distSwitchId}["${distSwitchName}"]
     CoreSwitch --> ${distSwitchId}
 `;
@@ -355,23 +328,12 @@ const generateTopologyDiagram = (departmentHosts, billOfMaterials) => {
     }
   });
 
-  // Add styling
-  diagram += `
-    %% Styling
-    classDef core fill:#ff6b6b,stroke:#333,stroke-width:2px,color:#fff
-    classDef distribution fill:#4ecdc4,stroke:#333,stroke-width:2px,color:#fff
-    classDef access fill:#45b7d1,stroke:#333,stroke-width:2px,color:#fff
-    classDef wireless fill:#96ceb4,stroke:#333,stroke-width:2px,color:#fff
-    
-    class Router,CoreSwitch core
-    class Dist1,Dist2,Dist3,Dist4,Dist5 distribution
-    class Access1,Access2,Access3,Access4,Access5 access
-    class AP1,AP2,AP3,AP4,AP5 wireless
-`;
-
   return diagram;
 };
 
 module.exports = {
-  generateDesign
+  generateDesign,
+ 
 };
+
+

@@ -21,11 +21,7 @@ export default function RequestList({ requests }) {
   const router = useRouter();
 
   const handleViewRequest = (requestId) => {
-<<<<<<< HEAD
     router.push(`/project/${requestId}`);
-=======
-    router.push(`/project-detail?id=${requestId}`);
->>>>>>> 220ba6f (design updated)
   };
 
   if (requests.length === 0) {

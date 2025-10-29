@@ -53,10 +53,10 @@ export const requestsAPI = {
   getAll: () => api.get('/requests'),
   getById: (id) => api.get(`/requests/${id}`),
   assign: (id, assignmentData) => api.put(`/requests/${id}/assign`, assignmentData),
-<<<<<<< HEAD
   addResponse: (id, responseData) => api.put(`/requests/${id}/response`, responseData),
   updateStatus: (id, status) => api.put(`/requests/${id}/status`, { status }),
-};
+  // --- NEW: Client marks as complete ---
+  markClientComplete: (id) => api.put(`/requests/${id}/complete-by-client`),};
 
 // Notifications API
 export const notificationsAPI = {
@@ -65,11 +65,6 @@ export const notificationsAPI = {
   markAllAsRead: () => api.put('/notifications/read-all'),
 };
 
-=======
-  updateStatus: (id, status) => api.put(`/requests/${id}/status`, { status }),
-};
-
->>>>>>> 220ba6f (design updated)
 // Admin API
 export const adminAPI = {
   getDevices: (params = {}) => api.get('/admin/devices', { params }),
@@ -86,7 +81,9 @@ export const designsAPI = {
   generate: (requestId) => api.post(`/designs/generate/${requestId}`),
   getById: (id) => api.get(`/designs/${id}`),
   getByRequest: (requestId) => api.get(`/designs/request/${requestId}`),
-  approve: (id, notes) => api.put(`/designs/${id}/approve`, { designNotes: notes }),
-};
+  submitForReview: (id) => api.put(`/designs/submit/${id}`), // Designer Submits
+  adminApprove: (id, notes) => api.put(`/designs/admin-approve/${id}`, { designNotes: notes }),
+}; // Admin Approves
+  // --------------------------------};
 
 export default api;

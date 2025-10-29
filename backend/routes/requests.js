@@ -1,14 +1,9 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-<<<<<<< HEAD
 const mongoose = require('mongoose');
 const Request = require('../models/Request');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
-=======
-const Request = require('../models/Request');
-const User = require('../models/User');
->>>>>>> 220ba6f (design updated)
 const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -20,13 +15,9 @@ router.post('/', [
   auth,
   authorize('Client'),
   body('requirements.campusName').notEmpty().withMessage('Campus name is required'),
-<<<<<<< HEAD
   body('requirements.departments').isArray({ min: 1 }).withMessage('At least one department is required'),
   body('description').optional().isLength({ max: 500 }).withMessage('Description must be less than 500 characters'),
   body('requestType').isIn(['Design Only', 'Installation Only', 'Both Design and Installation']).withMessage('Invalid request type')
-=======
-  body('requirements.departments').isArray({ min: 1 }).withMessage('At least one department is required')
->>>>>>> 220ba6f (design updated)
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -37,22 +28,14 @@ router.post('/', [
       });
     }
 
-<<<<<<< HEAD
     const { requirements, priority = 'Medium', description, requestType } = req.body;
-=======
-    const { requirements, priority = 'Medium' } = req.body;
->>>>>>> 220ba6f (design updated)
 
     const request = new Request({
       client: req.user._id,
       requirements,
-<<<<<<< HEAD
       priority,
       description,
       requestType
-=======
-      priority
->>>>>>> 220ba6f (design updated)
     });
 
     await request.save();
@@ -145,7 +128,6 @@ router.get('/:id', auth, async (req, res) => {
 router.put('/:id/assign', [
   auth,
   authorize('Web Admin'),
-<<<<<<< HEAD
   body('assignedDesigner').optional().custom((value) => {
     if (value && value !== '' && !mongoose.Types.ObjectId.isValid(value)) {
       throw new Error('Invalid designer ID');
@@ -158,12 +140,9 @@ router.put('/:id/assign', [
     }
     return true;
   }),
-=======
-  body('assignedDesigner').optional().isMongoId().withMessage('Invalid designer ID'),
-  body('assignedInstaller').optional().isMongoId().withMessage('Invalid installer ID'),
->>>>>>> 220ba6f (design updated)
-  body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design Complete', 'Installation In Progress', 'Completed'])
-    .withMessage('Invalid status')
+  // NEW:
+body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design Submitted', 'Awaiting Client Review', 'Design Complete', 'Installation In Progress', 'Completed'])
+.withMessage('Invalid status')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -182,29 +161,20 @@ router.put('/:id/assign', [
     }
 
     // Validate assigned users exist and have correct roles
-<<<<<<< HEAD
     if (assignedDesigner && assignedDesigner !== '') {
-=======
-    if (assignedDesigner) {
->>>>>>> 220ba6f (design updated)
       const designer = await User.findById(assignedDesigner);
       if (!designer || designer.role !== 'Network Designer') {
         return res.status(400).json({ message: 'Invalid designer assignment' });
       }
     }
 
-<<<<<<< HEAD
     if (assignedInstaller && assignedInstaller !== '') {
-=======
-    if (assignedInstaller) {
->>>>>>> 220ba6f (design updated)
       const installer = await User.findById(assignedInstaller);
       if (!installer || installer.role !== 'Network Installation Team') {
         return res.status(400).json({ message: 'Invalid installer assignment' });
       }
     }
 
-<<<<<<< HEAD
     // Update request - handle status changes first to avoid validation errors
     const updateData = {};
     if (status) {
@@ -234,13 +204,6 @@ router.put('/:id/assign', [
     }
     if (assignedDesigner && assignedDesigner !== '') updateData.assignedDesigner = assignedDesigner;
     if (assignedInstaller && assignedInstaller !== '') updateData.assignedInstaller = assignedInstaller;
-=======
-    // Update request
-    const updateData = {};
-    if (assignedDesigner) updateData.assignedDesigner = assignedDesigner;
-    if (assignedInstaller) updateData.assignedInstaller = assignedInstaller;
-    if (status) updateData.status = status;
->>>>>>> 220ba6f (design updated)
 
     const updatedRequest = await Request.findByIdAndUpdate(
       req.params.id,
@@ -248,7 +211,6 @@ router.put('/:id/assign', [
       { new: true, runValidators: true }
     ).populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email role');
 
-<<<<<<< HEAD
     // Create notification for the client
     if (updatedRequest.client) {
       const notification = new Notification({
@@ -261,8 +223,6 @@ router.put('/:id/assign', [
       await notification.save();
     }
 
-=======
->>>>>>> 220ba6f (design updated)
     res.json({
       message: 'Request updated successfully',
       request: updatedRequest
@@ -278,13 +238,9 @@ router.put('/:id/assign', [
 // @access  Private
 router.put('/:id/status', [
   auth,
-<<<<<<< HEAD
-  body('status').isIn(['New', 'Assigned', 'Design In Progress', 'Design Complete', 'Installation In Progress', 'Completed'])
-    .withMessage('Invalid status')
-=======
-  body('status').isIn(['New', 'Assigned', 'Design In Progress', 'Design Complete', 'Design Rejected', 'Installation In Progress', 'Completed'])
-  .withMessage('Invalid status')
->>>>>>> 220ba6f (design updated)
+  // NEW:
+body('status').isIn(['New', 'Assigned', 'Design In Progress', 'Design Submitted', 'Awaiting Client Review', 'Design Complete', 'Installation In Progress', 'Completed'])
+.withMessage('Invalid status')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -328,7 +284,6 @@ router.put('/:id/status', [
   }
 });
 
-<<<<<<< HEAD
 // @route   PUT /api/requests/:id/response
 // @desc    Add admin response to request
 // @access  Private (Web Admin only)
@@ -384,6 +339,51 @@ router.put('/:id/response', [
   }
 });
 
-=======
->>>>>>> 220ba6f (design updated)
+router.put('/:id/complete-by-client', auth, async (req, res) => {
+    try {
+      const request = await Request.findById(req.params.id);
+  
+      if (!request) {
+        return res.status(404).json({ message: 'Request not found' });
+      }
+  
+      // Ensure the client field is populated if not already
+      // This handles the case where request.client might be an ObjectId, not a full document
+      if (!request.client || typeof request.client.toString !== 'function') {
+          await request.populate('client');
+      }
+  
+      // Check if user is the client and request is in the right status
+      if (request.client.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Access denied. You are not the client for this request.' });
+      }
+      
+      // Check for the new status 'Awaiting Client Review'
+      if (request.status !== 'Awaiting Client Review') {
+        return res.status(400).json({ message: `Request status must be 'Awaiting Client Review' to be marked complete. Current status: ${request.status}` });
+      }
+  
+      // Update the request status to Final Completed
+      request.status = 'Completed';
+      request.actualCompletionDate = new Date();
+      // Also update progress to 100%
+      request.progress = 100;
+      await request.save();
+  
+      // NOTE: You may want to add logic here to notify the Admin and/or Installer 
+      // that the client has approved and marked the project as complete.
+  
+      res.json({
+        message: 'Request successfully marked as Completed by Client',
+        request
+      });
+    } catch (error) {
+      console.error('Client complete error:', error);
+      res.status(500).json({ message: 'Server error marking as complete' });
+    }
+  });
+
+
+
+
 module.exports = router;
