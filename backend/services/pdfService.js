@@ -1,15 +1,51 @@
 // backend/services/pdfService.js
 
-// NOTE: You must install a PDF generation library like 'pdfkit' or 'html-pdf'
-// npm install pdfkit
-const PDFDocument = require('pdfkit'); // Assuming pdfkit is used
+const PDFDocument = require('pdfkit'); 
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
+
+// --- Define the explicit path to the local binary ---
+// CRITICAL: This path goes up one level from 'backend' and looks inside 'node_modules/.bin'
+const MMDC_PATH = path.join(__dirname, '..', 'node_modules', '.bin', 'mmdc');
+// ----------------------------------------------------
+const TEMP_DIR = path.join(__dirname, '..', 'temp'); // path.join(__dirname, '..', 'temp');
+
+
+// ----------------------------------------------------------------------
+// --- NEW HELPER FUNCTION: CONVERT MERMAID TO PNG (Modified) ---
+// ----------------------------------------------------------------------
+const generateTopologyImage = (mermaidCode, tempImageFile) => {
+    return new Promise((resolve, reject) => {
+        if (!fs.existsSync(TEMP_DIR)) {
+            fs.mkdirSync(TEMP_DIR, { recursive: true });
+        }
+        
+        const tempMermaidFile = path.join(TEMP_DIR, 'topology_source.mmd');
+        fs.writeFileSync(tempMermaidFile, mermaidCode);
+        
+        // --- FINAL FIX: Use the explicit path to the executable ---
+        const command = `${MMDC_PATH} -i "${tempMermaidFile}" -o "${tempImageFile}" -t neutral --width 800`;
+        // ----------------------------------------------------------
+
+        // We run the exec command without relying on npx or explicit cwd settings
+        exec(command, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Mermaid CLI Error: ${stderr}`);
+                return reject(new Error(`Failed to render topology image: ${error.message}. Stderr: ${stderr}`));
+            }
+            // Clean up the temporary Mermaid source file
+            fs.unlinkSync(tempMermaidFile);
+            resolve(true);
+        });
+    });
+};
+
+// ----------------------------------------------------------------------
+// --- MAIN PDF GENERATION FUNCTION (MODIFIED) ---
+// ----------------------------------------------------------------------
 
 const generatePdfReport = async (designData, request, designer) => {
-  // 1. Define the save path
-  // NOTE: You'll need to create a secure, accessible directory for PDFs, 
-  // e.g., 'uploads/reports'. For production, use S3 or similar.
   const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'reports');
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -17,49 +53,85 @@ const generatePdfReport = async (designData, request, designer) => {
 
   const fileName = `DesignReport-${request.requirements.campusName.replace(/\s/g, '-')}-${request._id}.pdf`;
   const filePath = path.join(uploadDir, fileName);
+  
+  const tempImageFile = path.join(TEMP_DIR, `${request._id}_topology.png`);
 
-  return new Promise((resolve, reject) => {
-    try {
-      // 2. Create a document and pipe it to a file stream
-      const doc = new PDFDocument();
-      doc.pipe(fs.createWriteStream(filePath));
+  try {
+      // CRITICAL STEP: RENDER THE TOPOLOGY TO AN IMAGE BEFORE PDF GENERATION
+      await generateTopologyImage(designData.topologyDiagram, tempImageFile);
 
-      // --- PDF CONTENT GENERATION (Placeholder Logic) ---
-      doc.fontSize(25).text('Network Design Report', { align: 'center' });
-      doc.fontSize(15).text(`Request ID: ${request._id}`);
-      doc.fontSize(15).text(`Campus: ${request.requirements.campusName}`);
-      doc.fontSize(12).text(`Designed by: ${designer.name}`);
-      doc.text(`Estimated Cost: $${designData.totalEstimatedCost.toFixed(2)}`);
-      
-      doc.moveDown();
-      doc.fontSize(14).text('Bill of Materials (BOM):', { underline: true });
-      designData.billOfMaterials.forEach(item => {
-        const deviceName = item.device?.name || 'Unknown Device';
-        doc.text(`- ${deviceName}: Qty ${item.quantity} @ $${item.unitPrice.toFixed(2)}`);
+      return new Promise((resolve, reject) => {
+          const doc = new PDFDocument();
+          doc.pipe(fs.createWriteStream(filePath));
+
+          // --- PDF CONTENT GENERATION ---
+          doc.fontSize(25).text('Network Design Report', { align: 'center' });
+          // ... (Existing text fields: Request ID, Campus, Designer, Cost) ...
+          doc.fontSize(15).text(`Request ID: ${request._id}`);
+          doc.fontSize(15).text(`Campus: ${request.requirements.campusName}`);
+          doc.fontSize(12).text(`Designed by: ${designer.name}`);
+          doc.text(`Estimated Cost: $${designData.totalEstimatedCost.toFixed(2)}`);
+          
+          
+          // ------------------------------------
+          // 1. BILL OF MATERIALS (Simplified for brevity)
+          // ------------------------------------
+          doc.moveDown();
+          doc.fontSize(14).text('1. Bill of Materials (BOM):', { underline: true });
+          designData.billOfMaterials.forEach(item => {
+            const deviceName = item.device?.name || 'Unknown Device';
+            doc.text(`- ${deviceName} | Qty: ${item.quantity} @ $${item.unitPrice.toFixed(2)}`);
+          });
+
+          // ------------------------------------
+          // 2. IP PLAN SUMMARY (Simplified for brevity)
+          // ------------------------------------
+          doc.moveDown();
+          doc.fontSize(14).text('2. IP Plan Summary:', { underline: true });
+          designData.ipPlan.forEach(ip => {
+            doc.text(`- VLAN ${ip.vlanId} (${ip.departmentName}): ${ip.subnet}`);
+          });
+
+          // ------------------------------------
+          // 3. GRAPHICAL TOPOLOGY (IMAGE EMBEDDING)
+          // ------------------------------------
+          doc.moveDown();
+          doc.fontSize(14).text('3. Network Topology Diagram:', { underline: true });
+          doc.moveDown(0.5);
+
+          // EMBED THE GENERATED PNG IMAGE
+          if (fs.existsSync(tempImageFile)) {
+              doc.image(tempImageFile, {
+                  fit: [500, 300], // Adjust size to fit PDF page width
+                  align: 'center',
+                  valign: 'top'
+              });
+          } else {
+              doc.text('ERROR: Topology image could not be embedded.');
+          }
+          // ------------------------------------
+
+          doc.moveDown();
+          doc.fontSize(10).text(`Report Generated at: ${new Date().toLocaleString()}`, { align: 'right' });
+          
+          doc.end();
+          
+          // Clean up temporary image file after PDF is finalized
+          doc.on('end', () => {
+              fs.unlink(tempImageFile, (err) => {
+                  if (err) console.error("Error cleaning up temp image:", err);
+              });
+              const publicPath = `/uploads/reports/${fileName}`; 
+              resolve(publicPath);
+          });
       });
-
-      doc.moveDown();
-      doc.fontSize(14).text('IP Plan Summary:', { underline: true });
-      designData.ipPlan.forEach(ip => {
-        doc.text(`- VLAN ${ip.vlanId} (${ip.departmentName}): ${ip.subnet}`);
-      });
-      // NOTE: You can also render the topologyDiagram (Mermaid text) here, 
-      // but rendering the actual diagram requires a more complex library integration.
-
-      // --- End PDF Content ---
-
-      doc.end();
       
-      // Resolve with the final file path (this path will be stored in the DB)
-      // The path returned should be accessible by the frontend/API (e.g., /uploads/reports/...)
-      const publicPath = `/uploads/reports/${fileName}`; 
-      resolve(publicPath);
-
-    } catch (error) {
-      console.error('PDF generation failed:', error);
-      reject(new Error('Failed to generate PDF document'));
-    }
-  });
+  } catch (error) {
+      console.error('PDF generation error (Topology):', error);
+      // Ensure any failed temporary file is deleted
+      if (fs.existsSync(tempImageFile)) fs.unlinkSync(tempImageFile);
+      throw new Error(`Failed to generate design report: ${error.message}`);
+  }
 };
 
 module.exports = {

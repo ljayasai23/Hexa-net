@@ -17,6 +17,9 @@ const generateDesign = async (request) => {
     
     // Step 4: Generate topology diagram
     const topologyDiagram = generateTopologyDiagram(departmentHosts, billOfMaterials, ipPlan);    
+    if (!topologyDiagram || topologyDiagram.length < 50) {
+      console.error("CRITICAL: Topology diagram string is missing or too short!");
+  }
     // Step 5: Calculate total cost
     const totalEstimatedCost = billOfMaterials.reduce((total, item) => total + item.totalCost, 0);
     

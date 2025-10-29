@@ -11,37 +11,72 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
   const [loading, setLoading] = useState(false);
   const [showDesignModal, setShowDesignModal] = useState(false);
 
+  // DesignerRequestList.js (Inside handleGenerateDesign)
+
   const handleGenerateDesign = async (requestId) => {
     setLoading(true);
     try {
-      // NOTE: PDF is generated and saved on the backend here (designs.js POST route)
       const response = await designsAPI.generate(requestId);
-      setDesign(response.data.design);
+      
+      // CRITICAL FIX: Ensure the state update waits for the response
+      const updatedDesign = await LogicDesign.findByIdAndUpdate(
+        logicDesign._id,
+        { reportPdfUrl: pdfUrl },
+        { new: true, runValidators: true } // Run validators just in case
+    );
+    
+    if (!updatedDesign) {
+        // If the update fails, throw a clear error to the console
+        console.error("CRITICAL: Failed to update LogicDesign document with PDF URL.");
+        return res.status(500).json({ message: 'Internal error saving PDF link to database.' });
+    }
+      
+      setDesign(updatedDesign); // Sets the state with the fresh URL
       setShowDesignModal(true);
       onRequestUpdated();
       toast.success('Design generated and PDF created!');
     } catch (error) {
-      toast.error('Failed to generate design');
+      // Show the explicit error if the PDF URL wasn't returned
+      toast.error('Failed to generate design: ' + (error.message || 'Check server logs.'));
     } finally {
       setLoading(false);
     }
   };
 
   // --- MODIFIED: Renamed and logic changed for submission ---
-  const handleSubmitDesign = async (designId, notes) => {
+  // DesignerRequestList.js (Inside the main component function)
+
+  // --- MODIFIED: Renamed and logic changed for submission ---
+ // DesignerRequestList.js (Inside the main component function)
+
+  // --- MODIFIED: Renamed and logic changed for submission ---
+  // DesignerRequestList.js (Inside the main component function)
+
+  // --- MODIFIED: Renamed and logic changed for submission ---
+  // The function now accepts the design ID and the required URL directly.
+  const handleSubmitDesign = async (designId, notes, reportPdfUrl) => { // <-- NOTE: Added reportPdfUrl argument
+    
+    // Safety check (redundant, but good practice)
+    if (!reportPdfUrl) {
+        toast.error('Submission failed: PDF report URL is missing from data.');
+        return; 
+    }
+    
     try {
-      // The notes are NOT required by the submission endpoint, but we can send them for update if needed
-      // Here, we only call the submitForReview endpoint (which only needs the Design ID in the path)
+      // Send the request to the backend
       await designsAPI.submitForReview(designId); 
       toast.success('Design report submitted to Admin for review!');
       setShowDesignModal(false);
       onRequestUpdated();
     } catch (error) {
+      // Catch backend validation error if status is incorrect
       toast.error(error.response?.data?.message || 'Failed to submit design');
     }
   };
   // ---------------------------------------------------------
 
+  // ... rest of the main component code ...
+  // ---------------------------------------------------------
   const handleViewDesign = async (requestId) => {
     setLoading(true);
     try {
@@ -149,15 +184,23 @@ const DesignModal = ({ design, onSubmit, onClose }) => { // Changed prop from on
   const [isSubmitting, setIsSubmitting] = useState(false); // Changed state name
 
   const handleSubmit = async () => { // Changed handler name
-    // The design is considered "ready" if it exists and hasn't been submitted yet.
+    
+    // 1. Frontend Status Check
     if (design.request.status === 'Design Submitted') {
         toast.error('Design already submitted for review.');
+        return;
+    }
+
+    // 2. Frontend PDF URL Check (CRITICAL)
+    if (!design.reportPdfUrl) {
+        toast.error('PDF report has not been generated or saved. Please check server logs.');
         return;
     }
     
     setIsSubmitting(true);
     try {
-      await onSubmit(design._id, notes);
+      // CRITICAL: Pass the PDF URL property here to the handler
+      await onSubmit(design._id, notes, design.reportPdfUrl); 
     } finally {
       setIsSubmitting(false);
     }

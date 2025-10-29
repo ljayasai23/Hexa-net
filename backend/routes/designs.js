@@ -55,7 +55,7 @@ router.post('/generate/:requestId', [
     const pdfUrl = await generatePdfReport(logicDesign, request, designer);
     
     // 3. Update the LogicDesign with the PDF URL
-    logicDesign.reportPdfUrl = pdfUrl;
+    logicDesign.reportPdfUrl = updatedDesign.reportPdfUrl;
     await logicDesign.save();
     // Update the request with the design reference
     // New/Corrected Code (Prevents validation errors by using a direct update)
