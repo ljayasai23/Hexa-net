@@ -53,9 +53,8 @@ router.post('/generate/:requestId', [
     await logicDesign.populate('billOfMaterials.device');
     const designer = req.user; // Assuming req.user is populated by 'auth' middleware
     const pdfUrl = await generatePdfReport(logicDesign, request, designer);
-    
-    // 3. Update the LogicDesign with the PDF URL
-    logicDesign.reportPdfUrl = updatedDesign.reportPdfUrl;
+    // ...
+    logicDesign.reportPdfUrl = pdfUrl; // <--- FIX: Use the 'pdfUrl' variable
     await logicDesign.save();
     // Update the request with the design reference
     // New/Corrected Code (Prevents validation errors by using a direct update)

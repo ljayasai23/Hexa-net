@@ -2,9 +2,11 @@ const express = require('express');
 
 // --- MODIFIED IMPORT ---
 // const Notification = require('../models/Notification'); // DELETE THIS LINE
+// ...
 const { auth, authorize } = require('../middleware/auth');
-const { createNotification } = require('./notifications');
+const { createNotification } = require('../services/notificationService'); // <--- THIS IS THE FIX
 const { body, validationResult } = require('express-validator');
+// ...
 const mongoose = require('mongoose');
 const Request = require('../models/Request');
 const User = require('../models/User');
