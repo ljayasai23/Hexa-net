@@ -1,7 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
+const User = require('../models/User'); // Need to find Admin/Designer users
 const { auth } = require('../middleware/auth');
+
+/**
+ * Helper function to create a new notification.
+ * This function will be exported and used in designs.js and requests.js.
+ */
+const createNotification = async ({ user, request, type, title, message }) => {
+    try {
+        const notification = new Notification({
+            user,
+            project: request, // Assuming 'project' field links to the request ID
+            type,
+            title,
+            message,
+        });
+        await notification.save();
+        return notification;
+    } catch (error) {
+        console.error('Failed to create notification:', error);
+        // Do not throw, as notification failure shouldn't crash the main process
+    }
+};
+
+// --- Export the helper for other modules to use ---
+
+
+
+// --- Existing API Routes for Notifications (Keep these) ---
 
 // @route   GET /api/notifications
 // @desc    Get user notifications
@@ -67,4 +95,4 @@ router.put('/read-all', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = router;// Export the router separately

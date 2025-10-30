@@ -75,6 +75,9 @@ const logicDesignSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  reportPdfUrl: { // Stores the path/URL to the generated PDF
+    type: String
+  },
   designNotes: {
     type: String,
     trim: true

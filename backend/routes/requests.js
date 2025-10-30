@@ -1,11 +1,18 @@
 const express = require('express');
+
+// --- MODIFIED IMPORT ---
+// const Notification = require('../models/Notification'); // DELETE THIS LINE
+// ...
+const { auth, authorize } = require('../middleware/auth');
+const { createNotification } = require('../services/notificationService'); // <--- THIS IS THE FIX
 const { body, validationResult } = require('express-validator');
+// ...
 const mongoose = require('mongoose');
 const Request = require('../models/Request');
 const User = require('../models/User');
-const Notification = require('../models/Notification');
-const { auth, authorize } = require('../middleware/auth');
 
+
+const Notification = require('../models/Notification');
 const router = express.Router();
 
 // @route   POST /api/requests
@@ -140,8 +147,9 @@ router.put('/:id/assign', [
     }
     return true;
   }),
-  body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design Complete', 'Installation In Progress', 'Completed'])
-    .withMessage('Invalid status')
+  // NEW:
+body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design Submitted', 'Awaiting Client Review', 'Design Complete', 'Installation In Progress', 'Completed'])
+.withMessage('Invalid status')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -237,8 +245,9 @@ router.put('/:id/assign', [
 // @access  Private
 router.put('/:id/status', [
   auth,
-  body('status').isIn(['New', 'Assigned', 'Design In Progress', 'Design Complete', 'Installation In Progress', 'Completed'])
-    .withMessage('Invalid status')
+  // NEW:
+body('status').isIn(['New', 'Assigned', 'Design In Progress', 'Design Submitted', 'Awaiting Client Review', 'Design Complete', 'Installation In Progress', 'Completed'])
+.withMessage('Invalid status')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -336,5 +345,73 @@ router.put('/:id/response', [
     res.status(500).json({ message: 'Server error adding response' });
   }
 });
+
+router.put('/:id/complete-by-client', auth, async (req, res) => {
+    try {
+      const request = await Request.findById(req.params.id);
+  
+      if (!request) {
+        return res.status(404).json({ message: 'Request not found' });
+      }
+  
+      // Ensure the client field is populated if not already
+      // This handles the case where request.client might be an ObjectId, not a full document
+      if (!request.client || typeof request.client.toString !== 'function') {
+          await request.populate('client');
+      }
+  
+      // Check if user is the client and request is in the right status
+      if (request.client.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Access denied. You are not the client for this request.' });
+      }
+      
+      // Check for the new status 'Awaiting Client Review'
+      if (request.status !== 'Awaiting Client Review') {
+        return res.status(400).json({ message: `Request status must be 'Awaiting Client Review' to be marked complete. Current status: ${request.status}` });
+      }
+  
+      // Update the request status to Final Completed
+      request.status = 'Completed';
+      request.actualCompletionDate = new Date();
+      // Also update progress to 100%
+      request.progress = 100;
+      await request.save();
+  
+      // NOTE: You may want to add logic here to notify the Admin and/or Installer 
+      // that the client has approved and marked the project as complete.
+      // NOTE: Notify the Designer (and Admin) that the client accepted the design
+      if (request.assignedDesigner) {
+        await createNotification({
+            user: request.assignedDesigner,
+            request: request._id,
+            type: 'client_acceptance',
+            title: '✅ Design Accepted by Client',
+            message: `Your design report for project ${request._id.toString().slice(-4)} has been formally accepted by the client.`
+        });
+      }
+      
+      // Optional: Notify Admin that client finalized the request
+      const webAdmins = await User.find({ role: 'Web Admin' });
+      if (webAdmins.length > 0) {
+          await Promise.all(webAdmins.map(admin => createNotification({
+              user: admin._id,
+              request: request._id,
+              type: 'project_completed',
+              title: 'Project Completed by Client',
+              message: `Project ${request._id.toString().slice(-4)} has been marked as completed by the client.`
+          })));
+      }
+      res.json({
+        message: 'Request successfully marked as Completed by Client',
+        request
+      });
+    } catch (error) {
+      console.error('Client complete error:', error);
+      res.status(500).json({ message: 'Server error marking as complete' });
+    }
+  });
+
+
+
 
 module.exports = router;

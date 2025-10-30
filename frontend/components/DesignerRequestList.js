@@ -11,40 +11,92 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
   const [loading, setLoading] = useState(false);
   const [showDesignModal, setShowDesignModal] = useState(false);
 
+  // DesignerRequestList.js (Inside handleGenerateDesign)
+
   const handleGenerateDesign = async (requestId) => {
     setLoading(true);
     try {
       const response = await designsAPI.generate(requestId);
-      setDesign(response.data.design);
+      
+      // CRITICAL FIX: Ensure the state update waits for the response
+      const updatedDesign = await LogicDesign.findByIdAndUpdate(
+        logicDesign._id,
+        { reportPdfUrl: pdfUrl },
+        { new: true, runValidators: true } // Run validators just in case
+    );
+    
+    if (!updatedDesign) {
+        // If the update fails, throw a clear error to the console
+        console.error("CRITICAL: Failed to update LogicDesign document with PDF URL.");
+        return res.status(500).json({ message: 'Internal error saving PDF link to database.' });
+    }
+      
+      setDesign(updatedDesign); // Sets the state with the fresh URL
       setShowDesignModal(true);
       onRequestUpdated();
-      toast.success('Design generated successfully!');
+      toast.success('Design generated and PDF created!');
     } catch (error) {
-      toast.error('Failed to generate design');
+      // Show the explicit error if the PDF URL wasn't returned
+      toast.error('Failed to generate design: ' + (error.message || 'Check server logs.'));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleApproveDesign = async (designId, notes) => {
+  // --- MODIFIED: Renamed and logic changed for submission ---
+  // DesignerRequestList.js (Inside the main component function)
+
+  // --- MODIFIED: Renamed and logic changed for submission ---
+ // DesignerRequestList.js (Inside the main component function)
+
+  // --- MODIFIED: Renamed and logic changed for submission ---
+  // DesignerRequestList.js (Inside the main component function)
+
+  // --- MODIFIED: Renamed and logic changed for submission ---
+  // The function now accepts the design ID and the required URL directly.
+  const handleSubmitDesign = async (designId, notes, reportPdfUrl) => { // <-- NOTE: Added reportPdfUrl argument
+    
+    // Safety check (redundant, but good practice)
+    if (!reportPdfUrl) {
+        toast.error('Submission failed: PDF report URL is missing from data.');
+        return; 
+    }
+    
     try {
-      await designsAPI.approve(designId, notes);
-      toast.success('Design approved successfully!');
+      // Send the request to the backend
+      await designsAPI.submitForReview(designId); 
+      toast.success('Design report submitted to Admin for review!');
       setShowDesignModal(false);
       onRequestUpdated();
     } catch (error) {
-      toast.error('Failed to approve design');
+      // Catch backend validation error if status is incorrect
+      toast.error(error.response?.data?.message || 'Failed to submit design');
     }
   };
+  // ---------------------------------------------------------
 
+  // ... rest of the main component code ...
+  // ---------------------------------------------------------
   const handleViewDesign = async (requestId) => {
     setLoading(true);
     try {
-      const response = await designsAPI.getByRequest(requestId);
-      setDesign(response.data.design);
+      // 1. Fetch the Request details (Crucial to get the CURRENT STATUS)
+      const requestResponse = await requestsAPI.getById(requestId);
+      const requestData = requestResponse.data.request; // This has the status: 'Design In Progress'
+
+      // 2. Fetch the Design linked to the request
+      const designResponse = await designsAPI.getByRequest(requestId);
+      const designData = designResponse.data.design;
+      
+      // 3. CRITICAL FIX: Attach the full request object to the design object
+      //    This makes 'design.request.status' available to the DesignModal's logic.
+      designData.request = requestData; 
+      
+      setDesign(designData);
+      // We don't necessarily need setSelectedRequest here, but setting design is key.
       setShowDesignModal(true);
     } catch (error) {
-      toast.error('Failed to fetch design');
+      toast.error('Failed to fetch design or request details.');
     } finally {
       setLoading(false);
     }
@@ -82,6 +134,7 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
                     request.status === 'Assigned' ? 'bg-blue-100 text-blue-800' :
                     request.status === 'Design In Progress' ? 'bg-purple-100 text-purple-800' :
                     request.status === 'Design Complete' ? 'bg-green-100 text-green-800' :
+                    request.status === 'Design Submitted' ? 'bg-orange-100 text-orange-800' : // <-- NEW STATUS COLOR
                     'bg-gray-100 text-gray-800'
                   }`}>
                     {request.status}
@@ -115,7 +168,9 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
       {showDesignModal && design && (
         <DesignModal
           design={design}
-          onApprove={handleApproveDesign}
+          // --- MODIFIED PROP NAME ---
+          onSubmit={handleSubmitDesign} 
+          // --------------------------
           onClose={() => setShowDesignModal(false)}
         />
       )}
@@ -123,18 +178,47 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
   );
 }
 
-const DesignModal = ({ design, onApprove, onClose }) => {
+// --- MODIFIED DesignModal Component ---
+const DesignModal = ({ design, onSubmit, onClose }) => { // Changed prop from onApprove to onSubmit
   const [notes, setNotes] = useState('');
-  const [isApproving, setIsApproving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Changed state name
 
-  const handleApprove = async () => {
-    setIsApproving(true);
+  const handleSubmit = async () => { // Changed handler name
+    
+    // 1. Frontend Status Check
+    if (design.request.status === 'Design Submitted') {
+        toast.error('Design already submitted for review.');
+        return;
+    }
+
+    // 2. Frontend PDF URL Check (CRITICAL)
+    if (!design.reportPdfUrl) {
+        toast.error('PDF report has not been generated or saved. Please check server logs.');
+        return;
+    }
+    
+    setIsSubmitting(true);
     try {
-      await onApprove(design._id, notes);
+      // CRITICAL: Pass the PDF URL property here to the handler
+      await onSubmit(design._id, notes, design.reportPdfUrl); 
     } finally {
-      setIsApproving(false);
+      setIsSubmitting(false);
     }
   };
+
+  // Determine the button visibility and text
+  let buttonText = 'Request to Admin';
+  let isActionVisible = false;
+
+  if (design.request.status === 'Design In Progress') {
+    // Designer is ready to submit
+    isActionVisible = true;
+  } else if (design.request.status === 'Design Submitted') {
+    // Already submitted, maybe designer wants to save a draft but not re-submit
+    buttonText = 'Submitted (Waiting Admin)';
+    isActionVisible = false; // Hide the active submission button
+  }
+
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -153,6 +237,8 @@ const DesignModal = ({ design, onApprove, onClose }) => {
           </div>
 
           <div className="space-y-6">
+            {/* ... (BOM, IP Plan, Topology remain the same) ... */}
+            
             {/* Bill of Materials */}
             <div>
               <h4 className="text-lg font-medium text-gray-900 mb-3">Bill of Materials</h4>
@@ -195,15 +281,17 @@ const DesignModal = ({ design, onApprove, onClose }) => {
               >
                 Close
               </button>
-              {!design.isApproved && (
+              {/* --- MODIFIED BUTTON LOGIC AND TEXT --- */}
+              {isActionVisible && (
                 <button
-                  onClick={handleApprove}
-                  disabled={isApproving}
-                  className="btn-primary"
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="btn-primary bg-indigo-600 hover:bg-indigo-700"
                 >
-                  {isApproving ? 'Approving...' : 'Approve Design'}
+                  {isSubmitting ? 'Submitting...' : buttonText}
                 </button>
               )}
+              {/* -------------------------------------- */}
             </div>
           </div>
         </div>

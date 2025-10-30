@@ -13,8 +13,14 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['status_update', 'assignment', 'response', 'progress_update'],
-    required: true
+    enum: [
+      'assignment', 
+      'response',
+      'design_review',       // <-- NEW: Designer to Admin submission
+      'design_approved',     // <-- NEW: Admin to Client approval
+      'client_acceptance',   // <-- NEW: Client to Designer acceptance
+      'project_completed'    // <-- NEW: Client acceptance (used for Admin notification)
+  ],    required: true
   },
   title: {
     type: String,
