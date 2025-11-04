@@ -1,8 +1,10 @@
+// components/NotificationBell.js (Replace the entire component with this corrected version)
+
 import { useState, useEffect } from 'react';
 import { notificationsAPI } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import Link from 'next/link';
-
+ 
 export default function NotificationBell() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
@@ -54,13 +56,29 @@ export default function NotificationBell() {
     }
   };
 
+  // components/NotificationBell.js (Inside handleNotificationClick)
+
   const handleNotificationClick = (notification) => {
+    // 1. Mark as read and close dropdown
     if (!notification.isRead) {
       markAsRead(notification._id);
     }
     setIsOpen(false);
+    
+    // --- CRITICAL FIX: Direct to the correct file name with a query parameter ---
+    if (notification.project?._id) {
+        // Target the static page file name: project-detail.js
+        // Pass the ID as a query parameter (e.g., /project-detail?id=123...)
+        let targetPath = `/project-detail?id=${notification.project._id}`;
+        
+        // Navigate to the project detail page
+        window.location.href = targetPath;
+    } else {
+        // Fallback
+        window.location.href = '/dashboard';
+    }
+    // ---------------------------------------------------------------------------
   };
-
   if (!user) return null;
 
   return (
@@ -108,7 +126,8 @@ export default function NotificationBell() {
               notifications.map((notification) => (
                 <div
                   key={notification._id}
-                  onClick={() => handleNotificationClick(notification)}
+                  // onClick handler calls handleNotificationClick with the notification object
+                  onClick={() => handleNotificationClick(notification)} 
                   className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
                     !notification.isRead ? 'bg-blue-50' : ''
                   }`}

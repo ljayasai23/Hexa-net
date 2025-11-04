@@ -1,5 +1,6 @@
 const dotenv = require('dotenv'); // <-- THIS LINE WAS MISSING
 const express = require('express');
+const path = require('path');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
@@ -8,11 +9,11 @@ dotenv.config({ path: './.env' });
 console.log('MONGO_URI from env:', process.env.MONGO_URI);
 
 const app = express();
-
-// Middleware
 app.use(cors());
 app.use(express.json());
+// Middleware
 
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/requests', require('./routes/requests'));
