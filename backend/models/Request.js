@@ -8,7 +8,7 @@ const requestSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['New', 'Assigned', 'Design In Progress', 'Design Complete', 'Installation In Progress', 'Completed'],
+    enum: ['New', 'Assigned', 'Design In Progress', 'Design Complete', 'Design Submitted','Installation In Progress','Awaiting Client Review', 'Completed'],
     default: 'New'
   },
   assignedDesigner: {
