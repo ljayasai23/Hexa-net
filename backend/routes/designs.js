@@ -1,4 +1,7 @@
 const express = require('express');
+const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 const { generateDesign } = require('../services/designService');
 const { generatePdfReport } = require('../services/pdfService');
 // --- NEW IMPORT ---
@@ -56,22 +59,49 @@ router.post('/generate/:requestId', [
     // ...
     logicDesign.reportPdfUrl = pdfUrl; // <--- FIX: Use the 'pdfUrl' variable
     await logicDesign.save();
-    // Update the request with the design reference
-    // New/Corrected Code (Prevents validation errors by using a direct update)
-    // Update the request with the design reference and new status
-    const updatedRequest = await Request.findByIdAndUpdate(
-      request._id,
-      { 
-          design: logicDesign._id,
-          status: 'Design In Progress'
-      },
-      { new: true } // Return the updated document
-  );
+    // Update the request with the design reference, status, and progress
+    // This ensures the request reflects that design work has started
+    let updatedRequest;
+    try {
+        updatedRequest = await Request.findByIdAndUpdate(
+            request._id,
+            { 
+                design: logicDesign._id,
+                status: 'Design In Progress',
+                progress: 40 // Design generation is 40% progress
+            },
+            { new: true, runValidators: true } // Return the updated document with validation
+        );
+    } catch (validationError) {
+        console.error('Status update validation error during design generation:', validationError);
+        // Try without validators for old data compatibility
+        if (validationError.name === 'ValidationError') {
+            updatedRequest = await Request.findByIdAndUpdate(
+                request._id,
+                { 
+                    design: logicDesign._id,
+                    status: 'Design In Progress',
+                    progress: 40
+                },
+                { new: true, runValidators: false } // Skip validators for old data
+            );
+        } else {
+            throw validationError;
+        }
+    }
   
-  if (!updatedRequest) {
-      // Handle unexpected failure to update request
-      return res.status(500).json({ message: 'Design generated, but failed to update main request status.' });
-  }
+    if (!updatedRequest) {
+        console.error('Failed to update request after design generation');
+        // Handle unexpected failure to update request
+        return res.status(500).json({ message: 'Design generated, but failed to update main request status.' });
+    }
+    
+    console.log('Request updated after design generation:', {
+        id: updatedRequest._id,
+        status: updatedRequest.status,
+        progress: updatedRequest.progress,
+        hasDesign: !!updatedRequest.design
+    });
 
     // Populate the design data for response
     await logicDesign.populate('billOfMaterials.device');
@@ -207,39 +237,168 @@ router.put('/submit/:id', [
   authorize('Network Designer')
 ], async (req, res) => {
   try {
+    console.log('=== SUBMIT DESIGN ENDPOINT CALLED ===');
+    console.log('Design ID from params:', req.params.id);
+    console.log('User ID:', req.user?._id);
+    console.log('User role:', req.user?.role);
+    
+    // Validate design ID format
+    if (!req.params.id || !mongoose.Types.ObjectId.isValid(req.params.id)) {
+      console.error('Invalid design ID format:', req.params.id);
+      return res.status(400).json({ message: 'Invalid design ID format' });
+    }
+    
     const design = await LogicDesign.findById(req.params.id).populate('request');
 
     if (!design) {
+      console.error('Design not found for ID:', req.params.id);
       return res.status(404).json({ message: 'Design not found' });
     }
+    
+    console.log('Design found:', design._id);
+    console.log('Design request reference:', design.request);
+    
+    // If populate didn't work, try fetching request separately
+    let request = design.request;
+    if (!request && design.request) {
+      // If request is an ObjectId (not populated), fetch it
+      request = await Request.findById(design.request);
+    }
+    
+    if (!request) {
+      console.error('Request not found for design:', design._id);
+      return res.status(404).json({ message: 'Request associated with design not found' });
+    }
+    
+    console.log('Request found:', request._id);
+    console.log('Request status:', request.status);
+    console.log('Request assignedDesigner:', request.assignedDesigner);
+    
     if (!design.reportPdfUrl) {
+        console.error('PDF report URL missing for design:', design._id);
         return res.status(400).json({ message: 'PDF report is missing. Please regenerate the design.' });
     }
     
     // Check assignment
-    if (design.request.assignedDesigner?.toString() !== req.user._id.toString()) {
+    const assignedDesignerId = request.assignedDesigner?.toString();
+    const userId = req.user._id.toString();
+    console.log('Checking assignment - Assigned:', assignedDesignerId, 'User:', userId);
+    
+    if (assignedDesignerId !== userId) {
+      console.error('Access denied - designer mismatch');
       return res.status(403).json({ message: 'Access denied. You are not assigned to this request.' });
     }
 
-    // Update the request status
-    const updatedRequest = await Request.findByIdAndUpdate(
-        design.request._id,
-        { status: 'Design Submitted' },
-        { new: true }
-    );
+    // Log current request state for debugging
+    console.log('Current request status:', request.status);
+    console.log('Request ID:', request._id);
+    console.log('Updating to status: Design Submitted');
+
+    // Try to update the request status - use a safer approach for old data
+    // Note: findByIdAndUpdate with runValidators doesn't always throw - it might return null
+    // So we'll use a two-step approach: try with validators, fallback without
+    
+    let updatedRequest;
+    
+    // First, verify the request exists and get current state
+    const currentRequest = await Request.findById(request._id);
+    if (!currentRequest) {
+        console.error('Request not found in database:', request._id);
+        return res.status(404).json({ message: 'Request not found in database' });
+    }
+    
+    console.log('Current request before update:', {
+        id: currentRequest._id,
+        status: currentRequest.status,
+        assignedDesigner: currentRequest.assignedDesigner,
+        hasDesign: !!currentRequest.design
+    });
+    
+    // Try update with validators first
+    try {
+        updatedRequest = await Request.findByIdAndUpdate(
+            request._id,
+            { status: 'Design Submitted' },
+            { 
+                new: true, 
+                runValidators: true,
+                context: 'query' // This helps with validation
+            }
+        );
+        
+        // Check if update returned null (validation might have failed silently)
+        if (!updatedRequest) {
+            throw new Error('Update returned null - possible validation failure');
+        }
+        
+        console.log('Status updated successfully with validators');
+    } catch (updateError) {
+        console.error('Status update error (with validators):', updateError);
+        console.error('Error type:', updateError.name);
+        console.error('Error message:', updateError.message);
+        
+        // Try without validators as fallback (for old data compatibility)
+        console.log('Attempting update without validators (fallback)...');
+        try {
+            updatedRequest = await Request.findByIdAndUpdate(
+                request._id,
+                { status: 'Design Submitted' },
+                { 
+                    new: true, 
+                    runValidators: false // Skip validators for old data
+                }
+            );
+            
+            if (!updatedRequest) {
+                console.error('Fallback update also returned null');
+                return res.status(500).json({ 
+                    message: 'Failed to update request status',
+                    error: 'Update operation returned null - request may have been deleted'
+                });
+            }
+            
+            console.log('Status updated successfully (without validators) - old data compatibility mode');
+        } catch (fallbackError) {
+            console.error('Fallback update also failed:', fallbackError);
+            return res.status(500).json({ 
+                message: 'Failed to update request status',
+                error: fallbackError.message || 'Unknown error during status update',
+                details: fallbackError
+            });
+        }
+    }
+    
+    if (!updatedRequest) {
+        console.error('updatedRequest is null after all attempts');
+        return res.status(500).json({ message: 'Failed to update request status - update returned null' });
+    }
+    
+    console.log('Request status updated successfully to:', updatedRequest.status);
     
     // Logic to send a notification to the Web Admin (omitted for brevity)
     // 3. Notify the Web Admin
-    const webAdmins = await User.find({ role: 'Web Admin' });
-    if (webAdmins.length > 0) {
-        // Notify all admins
-        await Promise.all(webAdmins.map(admin => createNotification({
-            user: admin._id,
-            request: updatedRequest._id,
-            type: 'design_review',
-            title: '🟢 New Design Report Received',
-            message: `Report for project ${design.request._id.toString().slice(-4)} submitted by ${req.user.name} for your review.`
-        })));
+    try {
+        const webAdmins = await User.find({ role: 'Web Admin' });
+        if (webAdmins.length > 0) {
+            // Notify all admins - catch individual errors but don't fail the whole operation
+            await Promise.all(webAdmins.map(async (admin) => {
+                try {
+                    await createNotification({
+                        user: admin._id,
+                        request: updatedRequest._id,
+                        type: 'design_review',
+                        title: '🟢 New Design Report Received',
+                        message: `Report for project ${request._id.toString().slice(-4)} submitted by ${req.user?.name || 'Designer'} for your review.`
+                    });
+                } catch (notifError) {
+                    console.error(`Failed to create notification for admin ${admin._id}:`, notifError);
+                    // Continue even if notification fails
+                }
+            }));
+        }
+    } catch (notifError) {
+        console.error('Error creating notifications:', notifError);
+        // Don't fail the submission if notifications fail
     }
     res.json({
       message: 'Design submitted for Admin review successfully',
@@ -247,7 +406,25 @@ router.put('/submit/:id', [
     });
   } catch (error) {
     console.error('Submit design error:', error);
-    res.status(500).json({ message: 'Server error submitting design' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // Provide more specific error messages
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        message: 'Validation error submitting design',
+        error: error.message,
+        details: error.errors
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error submitting design',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -257,16 +434,89 @@ router.put('/submit/:id', [
 // @access  Private
 router.get('/request/:requestId', auth, async (req, res) => {
   try {
+    console.log('Fetching design for request ID:', req.params.requestId);
+    
     const design = await LogicDesign.findOne({ request: req.params.requestId })
       .populate('billOfMaterials.device')
       .populate('approvedBy', 'name email');
 
     if (!design) {
+      console.error('Design not found for request:', req.params.requestId);
       return res.status(404).json({ message: 'Design not found for this request' });
     }
 
+    console.log('Design found:', {
+      id: design._id,
+      hasReportPdfUrl: !!design.reportPdfUrl,
+      reportPdfUrl: design.reportPdfUrl
+    });
+
     // Check access permissions through the request
     const request = await Request.findById(req.params.requestId);
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+    
+    // AUTO-FIX: If reportPdfUrl is missing but PDF file exists, update it
+    if (!design.reportPdfUrl && request) {
+      const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'reports');
+      const campusName = request.requirements?.campusName || 'Unknown';
+      const fileName = `DesignReport-${campusName.replace(/\s/g, '-')}-${request._id}.pdf`;
+      const filePath = path.join(uploadDir, fileName);
+      
+      if (fs.existsSync(filePath)) {
+        console.log('⚠️ PDF file exists but reportPdfUrl is missing. Auto-fixing...');
+        const pdfUrl = `/uploads/reports/${fileName}`;
+        design.reportPdfUrl = pdfUrl;
+        await design.save();
+        console.log('✅ Auto-fixed reportPdfUrl:', pdfUrl);
+      } else {
+        console.log('⚠️ PDF file not found at expected path:', filePath);
+      }
+    }
+    
+    // AUTO-FIX: If design exists but status is incorrect (e.g., "Assigned" when design is created)
+    // This fixes data inconsistencies where design was created but status wasn't updated
+    if (design && request) {
+      const hasDesignButWrongStatus = 
+        request.design && 
+        request.status !== 'Design In Progress' && 
+        request.status !== 'Design Submitted' && 
+        request.status !== 'Awaiting Client Review' && 
+        request.status !== 'Completed' &&
+        request.status !== 'Installation In Progress';
+      
+      if (hasDesignButWrongStatus) {
+        console.log('⚠️ Design exists but status is incorrect. Auto-fixing...');
+        console.log('Current status:', request.status, 'Expected: Design In Progress');
+        
+        try {
+          await Request.findByIdAndUpdate(
+            request._id,
+            { 
+              status: 'Design In Progress',
+              progress: 40
+            },
+            { runValidators: false } // Skip validators for old data compatibility
+          );
+          console.log('✅ Auto-fixed request status to: Design In Progress');
+          
+          // Re-fetch the request to get updated status
+          const updatedRequestDoc = await Request.findById(request._id);
+          if (updatedRequestDoc) {
+            request = updatedRequestDoc;
+            // Update the design object's request reference if needed
+            if (design.request && typeof design.request === 'object') {
+              design.request.status = updatedRequestDoc.status;
+              design.request.progress = updatedRequestDoc.progress;
+            }
+          }
+        } catch (fixError) {
+          console.error('Failed to auto-fix request status:', fixError);
+        }
+      }
+    }
+    
     const canAccess = 
       request.client.toString() === req.user._id.toString() ||
       request.assignedDesigner?.toString() === req.user._id.toString() ||
@@ -277,7 +527,11 @@ router.get('/request/:requestId', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    res.json({ design });
+    // Ensure we return the design with all fields including reportPdfUrl
+    const designObj = design.toObject ? design.toObject() : design;
+    console.log('Returning design with reportPdfUrl:', designObj.reportPdfUrl);
+    
+    res.json({ design: designObj });
   } catch (error) {
     console.error('Get design by request error:', error);
     res.status(500).json({ message: 'Server error fetching design' });

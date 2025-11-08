@@ -63,14 +63,26 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
     }
     
     try {
+      console.log('Submitting design with ID:', designId);
       // Send the request to the backend
-      await designsAPI.submitForReview(designId); 
+      const response = await designsAPI.submitForReview(designId);
+      console.log('Submit response:', response);
       toast.success('Design report submitted to Admin for review!');
       setShowDesignModal(false);
       onRequestUpdated();
     } catch (error) {
+      console.error('Submit design error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error message:', error.message);
+      
       // Catch backend validation error if status is incorrect
-      toast.error(error.response?.data?.message || 'Failed to submit design');
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to submit design';
+      toast.error(errorMessage);
+      
+      // Log detailed error for debugging
+      if (error.response?.data?.details) {
+        console.error('Error details:', error.response.data.details);
+      }
     }
   };
   // ---------------------------------------------------------
@@ -88,6 +100,20 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
       const designResponse = await designsAPI.getByRequest(requestId);
       const designData = designResponse.data.design;
       
+      console.log('Fetched design data:', {
+        id: designData._id,
+        hasReportPdfUrl: !!designData.reportPdfUrl,
+        reportPdfUrl: designData.reportPdfUrl,
+        allKeys: Object.keys(designData)
+      });
+      
+      // Check if reportPdfUrl is missing
+      if (!designData.reportPdfUrl) {
+        console.error('⚠️ Design fetched but reportPdfUrl is missing!');
+        console.error('Full design object:', JSON.stringify(designData, null, 2));
+        // Don't show error toast here - let the modal handle it
+      }
+      
       // 3. CRITICAL FIX: Attach the full request object to the design object
       //    This makes 'design.request.status' available to the DesignModal's logic.
       designData.request = requestData; 
@@ -95,6 +121,10 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
       setDesign(designData);
       // We don't necessarily need setSelectedRequest here, but setting design is key.
       setShowDesignModal(true);
+      // Refresh parent list so the card reflects the new 'design' presence/status
+      if (typeof onRequestUpdated === 'function') {
+        onRequestUpdated();
+      }
     } catch (error) {
       toast.error('Failed to fetch design or request details.');
     } finally {

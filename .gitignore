@@ -33,3 +33,17 @@ npm-debug.log*
 # Specific to backend (Node.js)
 /backend/dist
 /backend/build
+
+   *.png
+   *.jpg
+   *.jpeg
+   *.gif
+   *.bmp
+   *.tiff
+   *.ico
+   *.webp
+   *.svg
+   *.eps
+   *.pdf
+   *.docx
+   *.doc

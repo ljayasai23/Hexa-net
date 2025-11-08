@@ -20,7 +20,8 @@ const notificationSchema = new mongoose.Schema({
       'design_approved',     // <-- NEW: Admin to Client approval
       'client_acceptance',   // <-- NEW: Client to Designer acceptance
       'project_completed'    // <-- NEW: Client acceptance (used for Admin notification)
-  ],    required: true
+    ],
+    required: true
   },
   title: {
     type: String,

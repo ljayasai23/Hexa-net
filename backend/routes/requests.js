@@ -110,6 +110,37 @@ router.get('/:id', auth, async (req, res) => {
     if (!request) {
       return res.status(404).json({ message: 'Request not found' });
     }
+    
+    // AUTO-FIX: If design exists but status is incorrect (data inconsistency fix)
+    if (request.design && request.status !== 'Design In Progress' && 
+        request.status !== 'Design Submitted' && 
+        request.status !== 'Awaiting Client Review' && 
+        request.status !== 'Completed' &&
+        request.status !== 'Installation In Progress') {
+      console.log('⚠️ Auto-fixing request status: Design exists but status is', request.status);
+      try {
+        await Request.findByIdAndUpdate(
+          request._id,
+          { 
+            status: 'Design In Progress',
+            progress: 40
+          },
+          { runValidators: false }
+        );
+        // Re-fetch to get updated status
+        const updatedRequest = await Request.findById(req.params.id)
+          .populate('client', 'name email')
+          .populate('assignedDesigner', 'name email')
+          .populate('assignedInstaller', 'name email')
+          .populate('design');
+        if (updatedRequest) {
+          Object.assign(request, updatedRequest.toObject());
+          console.log('✅ Auto-fixed request status to: Design In Progress');
+        }
+      } catch (fixError) {
+        console.error('Failed to auto-fix request status:', fixError);
+      }
+    }
 
     // Check access permissions
     const canAccess = 
