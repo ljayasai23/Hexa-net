@@ -7,8 +7,19 @@ import NotificationBell from './NotificationBell';
 
 const Layout = ({ children }) => {
   const { user, isAuthenticated, loading, logout } = useAuth(); 
+  const router = useRouter();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileMenuRef = useRef(null);
+
+  const navLinks = [
+    { href: '/dashboard', label: 'Dashboard' },
+    { href: '/projects', label: 'My Projects' }
+  ];
+
+  const isLinkActive = (href) => {
+    if (router.pathname === href) return true;
+    return router.pathname.startsWith(`${href}/`);
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -47,6 +58,26 @@ const Layout = ({ children }) => {
               <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-blue-500">
                 Campus Net Planner
               </h1>
+            </div>
+
+            {/* Primary navigation */}
+            <div className="hidden md:flex items-center space-x-2">
+              {navLinks.map((link) => {
+                const active = isLinkActive(link.href);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150 ${
+                      active
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-gray-600 hover:text-indigo-600 hover:bg-indigo-50'
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
             </div>
             
             {/* Right side of navbar with new icons and dropdown */}

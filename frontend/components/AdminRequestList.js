@@ -308,8 +308,22 @@ const ApproveDesignModal = ({ request, onApprove, onClose }) => {
     const fetchDesign = async () => {
       try {
         const response = await designsAPI.getByRequest(request._id);
-        setDesign(response.data.design);
+        const designData = response.data.design;
+        
+        console.log('Admin - Fetched design:', {
+          id: designData._id,
+          hasReportPdfUrl: !!designData.reportPdfUrl,
+          reportPdfUrl: designData.reportPdfUrl
+        });
+        
+        if (!designData.reportPdfUrl) {
+          console.error('⚠️ Admin - Design fetched but reportPdfUrl is missing!');
+          toast.error('PDF report URL is missing. The design may need to be regenerated.');
+        }
+        
+        setDesign(designData);
       } catch (error) {
+        console.error('Error fetching design for admin:', error);
         toast.error('Could not fetch design details.');
         onClose();
       } finally {
@@ -338,32 +352,50 @@ const ApproveDesignModal = ({ request, onApprove, onClose }) => {
           <LoadingSpinner />
         ) : design && design.reportPdfUrl ? (
           <div className="space-y-4">
-            <p>
-              <strong>Status:</strong> Submitted for Review
-            </p>
-
-            <a
-              href={`${process.env.NEXT_PUBLIC_API_URL.replace(
-                '/api',
-                ''
-              )}${design.reportPdfUrl}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <svg
-                className="-ml-1 mr-2 h-5 w-5"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              Download & Review PDF
-            </a>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-blue-900 mb-2">
+                ✅ Design Report Available
+              </p>
+              <p className="text-sm text-blue-700">
+                The designer has submitted the design report. Review the PDF below before approving.
+              </p>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg border">
+              <p className="text-sm font-medium text-gray-700 mb-3">
+                📄 Design Report PDF
+              </p>
+              
+              <div className="space-y-3">
+                <a
+                  href={`${process.env.NEXT_PUBLIC_API_URL?.replace(
+                    '/api',
+                    ''
+                  ) || 'http://localhost:5000'}${design.reportPdfUrl}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-md"
+                >
+                  <svg
+                    className="w-5 h-5 mr-2"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Download & Review PDF Report
+                </a>
+                
+                <p className="text-xs text-gray-500 mt-2">
+                  PDF URL: {design.reportPdfUrl}
+                </p>
+              </div>
+            </div>
 
             <div className="flex justify-end space-x-3">
               <button
@@ -382,8 +414,25 @@ const ApproveDesignModal = ({ request, onApprove, onClose }) => {
               </button>
             </div>
           </div>
+        ) : design ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-800 font-medium mb-2">⚠️ PDF Report Not Available</p>
+            <p className="text-sm text-red-700">
+              The design was found but the PDF report URL is missing. 
+              This may indicate the PDF was not generated properly. 
+              Please contact the designer to regenerate the design.
+            </p>
+            <p className="text-xs text-red-600 mt-2">
+              Design ID: {design._id}
+            </p>
+          </div>
         ) : (
-          <p className="text-red-600">Error: Design or PDF URL is missing.</p>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-800 font-medium">❌ Error: Design not found</p>
+            <p className="text-sm text-red-700 mt-2">
+              Could not retrieve design information for this request.
+            </p>
+          </div>
         )}
       </div>
     </div>

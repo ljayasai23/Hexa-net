@@ -111,12 +111,58 @@ export default function ProjectDetail() {
           {/* Status Display */}
           <div>
             <h4 className="text-sm font-medium text-gray-700 mb-1">Status</h4>
-            <p className={`text-lg font-bold ${request.status === 'Awaiting Client Review' ? 'text-teal-600' : 'text-gray-600'}`}>
+            <p className={`text-lg font-bold ${
+              request.status === 'Awaiting Client Review' ? 'text-teal-600' : 
+              request.status === 'Completed' ? 'text-green-600' :
+              'text-gray-600'
+            }`}>
               {request.status}
             </p>
           </div>
           
-          {/* --- CRITICAL: CLIENT ACCEPTANCE SECTION (The PDF/Accept buttons) --- */}
+          {/* Progress Display */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Progress</h4>
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+              <div 
+                className={`h-2.5 rounded-full ${
+                  request.status === 'Completed' ? 'bg-green-600' :
+                  request.status === 'Installation In Progress' ? 'bg-indigo-600' :
+                  request.status === 'Awaiting Client Review' ? 'bg-teal-600' :
+                  request.status === 'Design Submitted' ? 'bg-orange-600' :
+                  request.status === 'Design In Progress' ? 'bg-purple-600' :
+                  request.status === 'Assigned' ? 'bg-blue-600' :
+                  request.status === 'New' ? 'bg-yellow-600' :
+                  'bg-gray-400'
+                }`}
+                style={{ 
+                  width: request.progress ? `${request.progress}%` : 
+                    request.status === 'Completed' ? '100%' :
+                    request.status === 'Installation In Progress' ? '80%' :
+                    request.status === 'Awaiting Client Review' ? '90%' :
+                    request.status === 'Design Submitted' ? '70%' :
+                    request.status === 'Design In Progress' ? '40%' :
+                    request.status === 'Assigned' ? '20%' :
+                    request.status === 'New' ? '0%' :
+                    '10%'
+                }}
+              ></div>
+            </div>
+            <p className="text-sm text-gray-600">
+              {request.progress ? `${request.progress}%` : 
+                request.status === 'Completed' ? '100% Complete' :
+                request.status === 'Installation In Progress' ? '80% Complete' :
+                request.status === 'Awaiting Client Review' ? '90% Complete' :
+                request.status === 'Design Submitted' ? '70% Complete' :
+                request.status === 'Design In Progress' ? '40% Complete' :
+                request.status === 'Assigned' ? '20% Complete' :
+                request.status === 'New' ? '0% Complete' :
+                '10% Complete'
+              }
+            </p>
+          </div>
+          
+          {/* --- CLIENT ACCEPTANCE SECTION (Only shows when awaiting review) --- */}
           {showAcceptView && pdfUrl && (
             <div className="bg-green-50 border-l-4 border-green-400 p-4 mt-6">
               <h4 className="text-md font-bold text-green-800 mb-2">Action Required: Review Design Report</h4>
@@ -140,6 +186,46 @@ export default function ProjectDetail() {
                   {isAccepting ? 'Accepting...' : 'Design Accepted'}
                 </button>
               </div>
+            </div>
+          )}
+          
+          {/* --- DESIGN REPORT SECTION (Shows for completed projects and all projects with design) --- */}
+          {design && pdfUrl && request.status === 'Completed' && (
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-6">
+              <h4 className="text-md font-bold text-blue-800 mb-2">✅ Project Completed - Design Report</h4>
+              <p className="text-sm text-blue-700 mb-4">This project has been completed. You can review the final design report below.</p>
+              
+              <a 
+                  href={pdfUrl}
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  View & Download Final Design Report
+              </a>
+            </div>
+          )}
+          
+          {/* --- DESIGN REPORT SECTION (Shows for other statuses with design but not completed) --- */}
+          {design && pdfUrl && request.status !== 'Completed' && !showAcceptView && (
+            <div className="bg-gray-50 border-l-4 border-gray-400 p-4 mt-6">
+              <h4 className="text-md font-bold text-gray-800 mb-2">📄 Design Report</h4>
+              <p className="text-sm text-gray-700 mb-4">Design report is available for this project.</p>
+              
+              <a 
+                  href={pdfUrl}
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  View Design Report PDF
+              </a>
             </div>
           )}
           {/* ------------------------------------------------------------------ */}
