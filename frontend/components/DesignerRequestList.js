@@ -17,27 +17,22 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
     setLoading(true);
     try {
       const response = await designsAPI.generate(requestId);
+      const generatedDesign = response.data.design;
       
-      // CRITICAL FIX: Ensure the state update waits for the response
-      const updatedDesign = await LogicDesign.findByIdAndUpdate(
-        logicDesign._id,
-        { reportPdfUrl: pdfUrl },
-        { new: true, runValidators: true } // Run validators just in case
-    );
-    
-    if (!updatedDesign) {
-        // If the update fails, throw a clear error to the console
-        console.error("CRITICAL: Failed to update LogicDesign document with PDF URL.");
-        return res.status(500).json({ message: 'Internal error saving PDF link to database.' });
-    }
-      
-      setDesign(updatedDesign); // Sets the state with the fresh URL
+      // Set the design state to show in modal
+      setDesign(generatedDesign);
       setShowDesignModal(true);
-      onRequestUpdated();
+      
+      // Refresh the requests list to update the button state
+      // This ensures request.design is populated in the list
+      if (typeof onRequestUpdated === 'function') {
+        await onRequestUpdated();
+      }
+      
       toast.success('Design generated and PDF created!');
     } catch (error) {
       // Show the explicit error if the PDF URL wasn't returned
-      toast.error('Failed to generate design: ' + (error.message || 'Check server logs.'));
+      toast.error('Failed to generate design: ' + (error.response?.data?.message || error.message || 'Check server logs.'));
     } finally {
       setLoading(false);
     }

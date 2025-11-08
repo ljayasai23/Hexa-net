@@ -7,12 +7,21 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd backend && npm run dev",
     "client": "cd frontend && npm run dev",
-    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+    "install-all": "npm install --legacy-peer-deps && cd backend && npm install --legacy-peer-deps && cd ../frontend && npm install --legacy-peer-deps"
   },
-  "keywords": ["network", "planning", "campus", "mern", "automation"],
+  "keywords": [
+    "network",
+    "planning",
+    "campus",
+    "mern",
+    "automation"
+  ],
   "author": "Campus Net Planner Team",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
   }
 }

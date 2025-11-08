@@ -61,6 +61,10 @@ router.post('/generate/:requestId', [
     await logicDesign.save();
     // Update the request with the design reference, status, and progress
     // This ensures the request reflects that design work has started
+    // Calculate progress based on requestType
+    const requestType = request.requestType || 'Both Design and Installation';
+    const progress = requestType === 'Both Design and Installation' ? 25 : 40;
+    
     let updatedRequest;
     try {
         updatedRequest = await Request.findByIdAndUpdate(
@@ -68,7 +72,7 @@ router.post('/generate/:requestId', [
             { 
                 design: logicDesign._id,
                 status: 'Design In Progress',
-                progress: 40 // Design generation is 40% progress
+                progress: progress
             },
             { new: true, runValidators: true } // Return the updated document with validation
         );

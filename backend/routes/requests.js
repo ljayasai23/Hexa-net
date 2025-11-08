@@ -217,26 +217,44 @@ body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design
     const updateData = {};
     if (status) {
       updateData.status = status;
-      // Update progress based on status
+      // Update progress based on status and requestType
+      // If requestType is "Both Design and Installation", progress is split 50/50
+      // If requestType is "Design Only" or "Installation Only", that phase is 100%
+      const requestType = request.requestType || 'Both Design and Installation';
+      
       switch (status) {
         case 'New':
           updateData.progress = 0;
           break;
         case 'Assigned':
-          updateData.progress = 20;
+          updateData.progress = requestType === 'Both Design and Installation' ? 10 : 20;
           break;
         case 'Design In Progress':
-          updateData.progress = 40;
+          updateData.progress = requestType === 'Both Design and Installation' ? 25 : 40;
+          break;
+        case 'Design Submitted':
+          updateData.progress = requestType === 'Both Design and Installation' ? 35 : 50;
+          break;
+        case 'Awaiting Client Review':
+          updateData.progress = requestType === 'Both Design and Installation' ? 40 : 60;
           break;
         case 'Design Complete':
-          updateData.progress = 60;
+          // If only design is needed, this is 100%. If both are needed, this is 50%
+          updateData.progress = requestType === 'Design Only' ? 100 : 
+                                requestType === 'Both Design and Installation' ? 50 : 60;
           break;
         case 'Installation In Progress':
-          updateData.progress = 80;
+          // If only installation is needed, this is 50%. If both are needed, this is 75%
+          updateData.progress = requestType === 'Installation Only' ? 50 : 
+                                requestType === 'Both Design and Installation' ? 75 : 80;
           break;
         case 'Completed':
           updateData.progress = 100;
           updateData.actualCompletionDate = new Date();
+          break;
+        default:
+          // For other statuses, use default progress calculation
+          updateData.progress = request.progress || 0;
           break;
       }
     }
@@ -306,9 +324,47 @@ body('status').isIn(['New', 'Assigned', 'Design In Progress', 'Design Submitted'
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Calculate progress based on status and requestType
+    const requestType = request.requestType || 'Both Design and Installation';
+    let progress = request.progress || 0;
+    
+    switch (status) {
+      case 'New':
+        progress = 0;
+        break;
+      case 'Assigned':
+        progress = requestType === 'Both Design and Installation' ? 10 : 20;
+        break;
+      case 'Design In Progress':
+        progress = requestType === 'Both Design and Installation' ? 25 : 40;
+        break;
+      case 'Design Submitted':
+        progress = requestType === 'Both Design and Installation' ? 35 : 50;
+        break;
+      case 'Awaiting Client Review':
+        progress = requestType === 'Both Design and Installation' ? 40 : 60;
+        break;
+      case 'Design Complete':
+        progress = requestType === 'Design Only' ? 100 : 
+                   requestType === 'Both Design and Installation' ? 50 : 60;
+        break;
+      case 'Installation In Progress':
+        progress = requestType === 'Installation Only' ? 50 : 
+                   requestType === 'Both Design and Installation' ? 75 : 80;
+        break;
+      case 'Completed':
+        progress = 100;
+        break;
+    }
+
+    const updateData = { status, progress };
+    if (status === 'Completed') {
+      updateData.actualCompletionDate = new Date();
+    }
+
     const updatedRequest = await Request.findByIdAndUpdate(
       req.params.id,
-      { status },
+      updateData,
       { new: true, runValidators: true }
     ).populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email role');
 

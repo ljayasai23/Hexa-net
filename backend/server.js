@@ -1,4 +1,5 @@
-const dotenv = require('dotenv'); // <-- THIS LINE WAS MISSING
+const dotenv = require('dotenv');
+ // <-- THIS LINE WAS MISSING
 const express = require('express');
 const path = require('path');
 const mongoose = require('mongoose');
