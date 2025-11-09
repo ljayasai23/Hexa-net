@@ -18,7 +18,7 @@ const StatCard = ({ title, value, icon, color = 'blue' }) => {
     <div className="bg-white overflow-hidden shadow rounded-lg">
       <div className="p-5">
         <div className="flex items-center">
-          <div className="flex-shrink-0">
+          <div className={`flex-shrink-0 ${colorClasses[color] || colorClasses.blue}`}>
             {icon}
           </div>
           <div className="ml-5 w-0 flex-1">

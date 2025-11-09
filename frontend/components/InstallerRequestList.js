@@ -95,6 +95,8 @@ export default function InstallerRequestList({ requests, onRequestUpdated }) {
   const inProgressRequests = activeRequests.filter(r => 
     r.status === 'Installation In Progress'
   );
+  
+  const completedRequests = requests.filter(r => r.status === 'Completed');
 
   const renderRequestCard = (request) => (
     <div key={request._id} className="card hover:shadow-lg transition-shadow">
