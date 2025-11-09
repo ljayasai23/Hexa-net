@@ -58,10 +58,23 @@ export default function RequestForm({ onSuccess, onCancel }) {
   };
 
   const handleRequestTypeChange = (e) => {
+    const newRequestType = e.target.value;
     setFormData({
       ...formData,
-      requestType: e.target.value,
-      uploadedFiles: [] // Clear uploaded files when request type changes
+      requestType: newRequestType,
+      uploadedFiles: [], // Clear uploaded files when request type changes
+      // Clear departments if switching to Installation Only
+      requirements: newRequestType === 'Installation Only' 
+        ? { ...formData.requirements, departments: [] }
+        : formData.requirements.departments.length === 0
+          ? {
+              ...formData.requirements,
+              departments: [{
+                name: '',
+                rooms: [{ name: '', wiredHosts: 0, wirelessHosts: 0 }]
+              }]
+            }
+          : formData.requirements
     });
   };
 
@@ -197,31 +210,88 @@ export default function RequestForm({ onSuccess, onCancel }) {
     }
 
     // Validate file uploads for Installation Only requests
-    if (formData.requestType === 'Installation Only' && formData.uploadedFiles.length === 0) {
-      toast.error('Please upload design documents for installation-only requests');
-      return;
+    if (formData.requestType === 'Installation Only') {
+      if (formData.uploadedFiles.length === 0) {
+        toast.error('Please upload design PDF document for installation-only requests');
+        return;
+      }
+      // Check if at least one file is a PDF
+      const hasPdf = formData.uploadedFiles.some(file => {
+        const fileName = file.file?.name || file.name || '';
+        return fileName.toLowerCase().endsWith('.pdf');
+      });
+      if (!hasPdf) {
+        toast.error('Please upload at least one PDF file containing the design document');
+        return;
+      }
     }
 
-    const hasValidDepartments = formData.requirements.departments.every(dept => 
-      dept.name.trim() && dept.rooms.some(room => room.name.trim())
-    );
+    // Validate departments only for Design Only or Both Design and Installation
+    if (formData.requestType !== 'Installation Only') {
+      const hasValidDepartments = formData.requirements.departments.every(dept => 
+        dept.name.trim() && dept.rooms.some(room => room.name.trim())
+      );
 
-    if (!hasValidDepartments) {
-      toast.error('All departments must have a name and at least one room');
-      return;
+      if (!hasValidDepartments) {
+        toast.error('All departments must have a name and at least one room');
+        return;
+      }
     }
-
-    // setIsSubmitting(true); // <-- 3. REMOVED THIS
 
     try {
-      await requestsAPI.create(formData);
+      // Prepare submission data
+      let submissionData = {
+        ...formData,
+        requirements: {
+          ...formData.requirements,
+          // For Installation Only, send empty departments array
+          departments: formData.requestType === 'Installation Only' 
+            ? [] 
+            : formData.requirements.departments
+        },
+        uploadedFiles: []
+      };
+
+      // For Installation Only, convert files to base64 and prepare for upload
+      if (formData.requestType === 'Installation Only' && formData.uploadedFiles.length > 0) {
+        const filePromises = formData.uploadedFiles.map(async (fileObj) => {
+          const file = fileObj.file || fileObj;
+          if (file instanceof File) {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const base64String = reader.result.split(',')[1]; // Remove data:application/pdf;base64, prefix
+                resolve({
+                  filename: file.name,
+                  originalName: file.name,
+                  fileSize: file.size,
+                  fileType: file.type,
+                  base64Data: base64String
+                });
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+          } else {
+            // If file is already processed, return metadata
+            return {
+              filename: fileObj.name,
+              originalName: fileObj.name,
+              fileSize: fileObj.size,
+              fileType: 'application/pdf'
+            };
+          }
+        });
+
+        submissionData.uploadedFiles = await Promise.all(filePromises);
+      }
+
+      await requestsAPI.create(submissionData);
+      toast.success('Request submitted successfully!');
       onSuccess();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to create request');
-    } 
-    // finally {
-    //   setIsSubmitting(false); // <-- 4. REMOVED THIS
-    // }
+    }
   };
 
   return (
@@ -287,15 +357,33 @@ export default function RequestForm({ onSuccess, onCancel }) {
 
       {/* File Upload Section - Only for Installation Only */}
       {formData.requestType === 'Installation Only' && (
+        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-700">
+                <strong>Installation Only Request:</strong> Please upload your existing network design PDF document. 
+                Our installation team will review it and provide cost estimates and scheduling options.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {formData.requestType === 'Installation Only' && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Upload Design Documents *
+            Upload Design PDF Document * <span className="text-red-500">(Required)</span>
           </label>
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-400 transition-colors">
             <input
               type="file"
               multiple
-              accept=".pdf,.doc,.docx,.dwg,.jpg,.jpeg,.png"
+              accept=".pdf"
               onChange={handleFileUpload}
               className="hidden"
               id="file-upload"
@@ -307,35 +395,47 @@ export default function RequestForm({ onSuccess, onCancel }) {
               <p className="mt-2 text-sm text-gray-600">
                 <span className="font-medium text-primary-600 hover:text-primary-500">Click to upload</span> or drag and drop
               </p>
-              <p className="text-xs text-gray-500">PDF, DOC, DWG, JPG, PNG files (Max 10MB each)</p>
+              <p className="text-xs text-gray-500 mt-1">
+                PDF files only (Max 10MB per file)
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Upload your network design PDF document that contains BOM, IP plan, topology, etc.
+              </p>
             </label>
           </div>
           
           {/* Display uploaded files */}
           {formData.uploadedFiles.length > 0 && (
             <div className="mt-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Uploaded Files:</h4>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Uploaded Design Documents:</h4>
               <div className="space-y-2">
-                {formData.uploadedFiles.map((file) => (
-                  <div key={file.id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                    <div className="flex items-center space-x-2">
-                      <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <span className="text-sm text-gray-700">{file.name}</span>
-                      <span className="text-xs text-gray-500">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                {formData.uploadedFiles.map((file) => {
+                  const fileName = file.file?.name || file.name;
+                  const fileSize = file.file?.size || file.size;
+                  return (
+                    <div key={file.id} className="flex items-center justify-between bg-gray-50 p-3 rounded border border-gray-200">
+                      <div className="flex items-center space-x-3">
+                        <svg className="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <div>
+                          <span className="text-sm font-medium text-gray-700">{fileName}</span>
+                          <span className="text-xs text-gray-500 ml-2">({(fileSize / 1024 / 1024).toFixed(2)} MB)</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(file.id)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                        title="Remove file"
+                      >
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(file.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -360,18 +460,20 @@ export default function RequestForm({ onSuccess, onCancel }) {
         </p>
       </div>
 
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Departments & Rooms</h3>
-          <button
-            type="button"
-            onClick={addDepartment}
-            className="btn-secondary flex items-center"
-          >
-            <PlusIcon className="w-4 h-4 mr-2" />
-            Add Department
-          </button>
-        </div>
+      {/* Departments & Rooms Section - Hidden for Installation Only */}
+      {formData.requestType !== 'Installation Only' && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Departments & Rooms</h3>
+            <button
+              type="button"
+              onClick={addDepartment}
+              className="btn-secondary flex items-center"
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Add Department
+            </button>
+          </div>
 
         {formData.requirements.departments.map((department, deptIndex) => (
           <div key={deptIndex} className="border border-gray-200 rounded-lg p-4 mb-4">
@@ -445,11 +547,12 @@ export default function RequestForm({ onSuccess, onCancel }) {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Additional Requirements
+          Additional Requirements {formData.requestType === 'Installation Only' && '(Optional)'}
         </label>
         <textarea
           value={formData.requirements.additionalRequirements}

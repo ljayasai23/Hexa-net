@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import useRealTimeUpdates from '../hooks/useRealTimeUpdates';
 import Link from 'next/link';
+import { formatRequestType, getRequestTypeBadgeColor, getRequestTypeIcon } from '../utils/requestUtils';
 
 // Status badge component
 const StatusBadge = ({ status }) => {
@@ -87,9 +88,14 @@ const ProjectCard = ({ project }) => {
     <div className="card hover:shadow-lg transition-shadow duration-200">
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {projectTitle}
-          </h3>
+          <div className="flex items-center space-x-2 mb-2">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {projectTitle}
+            </h3>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRequestTypeBadgeColor(project.requestType)}`}>
+              {getRequestTypeIcon(project.requestType)} {formatRequestType(project.requestType)}
+            </span>
+          </div>
           <div className="flex items-center space-x-4 mb-2">
             <StatusBadge status={project.status} />
             <span className="text-sm text-gray-500">

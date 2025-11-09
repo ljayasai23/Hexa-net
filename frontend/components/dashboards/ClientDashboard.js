@@ -6,6 +6,7 @@ import RequestForm from '../RequestForm';
 import RequestList from '../RequestList';
 import Link from 'next/link';
 import useRealTimeUpdates from '../../hooks/useRealTimeUpdates';
+import { formatRequestType, getRequestTypeBadgeColor, getRequestTypeIcon } from '../../utils/requestUtils';
 
 // SVG Icons for Stats
 const FolderIcon = () => (
@@ -171,28 +172,40 @@ export default function ClientDashboard() {
           <h2 className="text-lg font-medium text-gray-900 mb-3">Recent Activity</h2>
           <div className="card">
             <div className="space-y-3">
-              {recentActivity.map((request, index) => (
-                <div key={request._id || index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">
-                      {request.title || 'Network Request'}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {request.status} • {new Date(request.updatedAt || request.createdAt).toLocaleDateString()}
-                    </p>
+              {recentActivity.map((request, index) => {
+                const requestTypeLabel = formatRequestType(request.requestType);
+                const requestTypeBadge = getRequestTypeBadgeColor(request.requestType);
+                const requestTypeIcon = getRequestTypeIcon(request.requestType);
+                
+                return (
+                  <div key={request._id || index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm">{requestTypeIcon}</span>
+                        <p className="text-sm font-medium text-gray-900">
+                          {request.requirements?.campusName || request.title || 'Network Request'}
+                        </p>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${requestTypeBadge}`}>
+                          {requestTypeLabel}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {request.status} • {new Date(request.updatedAt || request.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        request.status === 'Completed' ? 'bg-green-100 text-green-800' :
+                        request.status === 'New' ? 'bg-blue-100 text-blue-800' :
+                        request.status === 'In Progress' || request.status === 'Design In Progress' || request.status === 'Installation In Progress' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {request.status}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      request.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                      request.status === 'New' ? 'bg-blue-100 text-blue-800' :
-                      request.status === 'In Progress' || request.status === 'Design In Progress' || request.status === 'Installation In Progress' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {request.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="mt-4 pt-4 border-t border-gray-200">
               <Link href="/projects" className="text-primary-600 hover:text-primary-700 text-sm font-medium">

@@ -8,6 +8,7 @@ export default function DeviceCatalog() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
+  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     fetchDevices();
@@ -15,12 +16,33 @@ export default function DeviceCatalog() {
 
   const fetchDevices = async () => {
     try {
-      const response = await adminAPI.getDevices();
+      const response = await adminAPI.getDevices({ limit: 1000 }); // Get all devices
       setDevices(response.data.devices);
     } catch (error) {
       toast.error('Failed to fetch devices');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSeedDevices = async () => {
+    if (devices.length > 0) {
+      const confirmed = window.confirm(
+        `Device catalog already contains ${devices.length} device(s). Seeding will only work if the catalog is empty. Do you want to continue?`
+      );
+      if (!confirmed) return;
+    }
+
+    setSeeding(true);
+    try {
+      const response = await adminAPI.seedDevices();
+      toast.success(response.data.message || `Successfully seeded ${response.data.count} devices!`);
+      fetchDevices(); // Refresh the list
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Failed to seed devices';
+      toast.error(errorMessage);
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -65,14 +87,52 @@ export default function DeviceCatalog() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-gray-900">Device Catalog</h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="btn-primary"
-        >
-          Add Device
-        </button>
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Device Catalog</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {devices.length === 0 
+              ? 'No devices found. Click "Seed Sample Devices" to populate the catalog with sample data for BOM generation.'
+              : `${devices.length} device(s) in catalog`
+            }
+          </p>
+        </div>
+        <div className="flex space-x-2">
+          {devices.length === 0 && (
+            <button
+              onClick={handleSeedDevices}
+              disabled={seeding}
+              className="btn-primary bg-green-600 hover:bg-green-700"
+            >
+              {seeding ? 'Seeding...' : 'Seed Sample Devices'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowForm(true)}
+            className="btn-primary"
+          >
+            Add Device
+          </button>
+        </div>
       </div>
+
+      {devices.length === 0 && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">
+                <strong>Device catalog is empty!</strong> You need to add devices before generating designs. 
+                Click "Seed Sample Devices" to quickly populate the catalog with 13 sample devices (Routers, Switches, Access Points) 
+                that will be used for BOM generation.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <DeviceForm

@@ -5,6 +5,7 @@ import { requestsAPI, designsAPI } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { formatRequestType, getRequestTypeBadgeColor, getRequestTypeIcon } from '../../utils/requestUtils';
 
 export default function ProjectDetail() {
   const router = useRouter();
@@ -90,15 +91,20 @@ export default function ProjectDetail() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-8">
-        <Link href="/projects" className="text-primary-600 hover:text-primary-700 flex items-center mb-4">
+        <Link href="/dashboard" className="text-primary-600 hover:text-primary-700 flex items-center mb-4">
           <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Back to Projects
+          Back to Dashboard
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Project: {request.requirements?.campusName || 'Details'}
-        </h1>
+        <div className="flex items-center space-x-3 mb-2 flex-wrap">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Project: {request.requirements?.campusName || 'Details'}
+          </h1>
+          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getRequestTypeBadgeColor(request.requestType)}`}>
+            {getRequestTypeIcon(request.requestType)} {formatRequestType(request.requestType)}
+          </span>
+        </div>
         <p className="text-gray-600">
           Project ID: {id}
         </p>
@@ -107,6 +113,14 @@ export default function ProjectDetail() {
       <div className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Project Information</h2>
         <div className="space-y-4">
+          
+          {/* Request Type Display */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Request Type</h4>
+            <p className="text-lg font-semibold text-gray-900">
+              {request.requestType ? formatRequestType(request.requestType) : 'Not Specified'}
+            </p>
+          </div>
           
           {/* Status Display */}
           <div>

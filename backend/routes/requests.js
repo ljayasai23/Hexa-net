@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 
 // --- MODIFIED IMPORT ---
 // const Notification = require('../models/Notification'); // DELETE THIS LINE
@@ -22,9 +24,24 @@ router.post('/', [
   auth,
   authorize('Client'),
   body('requirements.campusName').notEmpty().withMessage('Campus name is required'),
-  body('requirements.departments').isArray({ min: 1 }).withMessage('At least one department is required'),
-  body('description').optional().isLength({ max: 500 }).withMessage('Description must be less than 500 characters'),
-  body('requestType').isIn(['Design Only', 'Installation Only', 'Both Design and Installation']).withMessage('Invalid request type')
+  body('requirements.departments').custom((value, { req }) => {
+    // Departments are required only for Design Only or Both Design and Installation
+    if (req.body.requestType !== 'Installation Only') {
+      if (!Array.isArray(value) || value.length === 0) {
+        throw new Error('At least one department is required for design requests');
+      }
+    }
+    // For Installation Only, departments can be empty array
+    return true;
+  }),
+  body('description').notEmpty().withMessage('Description is required')
+    .isLength({ min: 50, max: 500 }).withMessage('Description must be between 50 and 500 characters'),
+  body('requestType').isIn(['Design Only', 'Installation Only', 'Both Design and Installation']).withMessage('Invalid request type'),
+  body('uploadedFiles').custom((value, { req }) => {
+    // For Installation Only, at least one uploaded file should be present (handled in frontend)
+    // Backend validation is lenient here since files might be handled separately
+    return true;
+  })
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -35,17 +52,82 @@ router.post('/', [
       });
     }
 
-    const { requirements, priority = 'Medium', description, requestType } = req.body;
+    const { requirements, priority = 'Medium', description, requestType, uploadedFiles = [] } = req.body;
 
-    const request = new Request({
+    // For Installation Only, set empty departments array if not provided or if empty
+    const requestData = {
       client: req.user._id,
-      requirements,
+      requirements: {
+        campusName: requirements.campusName,
+        departments: requestType === 'Installation Only' ? [] : (requirements.departments || []),
+        additionalRequirements: requirements.additionalRequirements || ''
+      },
       priority,
       description,
-      requestType
-    });
+      requestType,
+      uploadedFiles: uploadedFiles || []
+    };
 
+    // For Installation Only, validate that files are provided and save them
+    if (requestType === 'Installation Only') {
+      if (!uploadedFiles || uploadedFiles.length === 0) {
+        return res.status(400).json({ 
+          message: 'Design documents are required for installation-only requests. Please upload at least one PDF file.' 
+        });
+      }
+
+      // Create uploads directory if it doesn't exist
+      const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'designs');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      // Process and save uploaded files
+      const savedFiles = [];
+      for (const fileData of uploadedFiles) {
+        try {
+          // Generate unique filename
+          const timestamp = Date.now();
+          const sanitizedCampusName = (requirements.campusName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '-');
+          const filename = `Design-${sanitizedCampusName}-${timestamp}-${fileData.originalName || fileData.filename}`;
+          const filePath = path.join(uploadsDir, filename);
+
+          // If base64 data is provided, decode and save
+          if (fileData.base64Data) {
+            const fileBuffer = Buffer.from(fileData.base64Data, 'base64');
+            fs.writeFileSync(filePath, fileBuffer);
+          } else {
+            // If no base64 data, create a placeholder (file upload will be handled separately)
+            // For now, we'll just store the metadata
+            console.warn('File uploaded without base64 data, storing metadata only');
+          }
+
+          // Store file information
+          savedFiles.push({
+            filename: filename,
+            originalName: fileData.originalName || fileData.filename,
+            filePath: `/uploads/designs/${filename}`,
+            fileSize: fileData.fileSize || 0,
+            uploadedAt: new Date()
+          });
+        } catch (fileError) {
+          console.error('Error saving file:', fileError);
+          // Continue with other files even if one fails
+        }
+      }
+
+      if (savedFiles.length === 0) {
+        return res.status(400).json({ 
+          message: 'Failed to save uploaded files. Please try again.' 
+        });
+      }
+
+      requestData.uploadedFiles = savedFiles;
+    }
+
+    const request = new Request(requestData);
     await request.save();
+
     await request.populate('client', 'name email');
 
     res.status(201).json({
@@ -54,7 +136,16 @@ router.post('/', [
     });
   } catch (error) {
     console.error('Create request error:', error);
-    res.status(500).json({ message: 'Server error creating request' });
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors: Object.keys(error.errors).map(key => ({
+          field: key,
+          message: error.errors[key].message
+        }))
+      });
+    }
+    res.status(500).json({ message: 'Server error creating request', error: error.message });
   }
 });
 
@@ -267,16 +358,48 @@ body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design
       { new: true, runValidators: true }
     ).populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email role');
 
-    // Create notification for the client
+    // Create notifications
     if (updatedRequest.client) {
       const notification = new Notification({
         user: updatedRequest.client._id,
         project: updatedRequest._id,
         type: 'assignment',
         title: 'Project Assignment Update',
-        message: `Your project "${updatedRequest.title || 'Network Request'}" has been assigned to a designer. Status: ${updatedRequest.status}`
+        message: `Your project "${updatedRequest.requirements?.campusName || 'Network Request'}" has been updated. Status: ${updatedRequest.status}`
       });
       await notification.save();
+    }
+
+    // Create notification for assigned installer
+    if (assignedInstaller && assignedInstaller !== '' && updatedRequest.assignedInstaller) {
+      try {
+        await createNotification({
+          user: updatedRequest.assignedInstaller._id,
+          request: updatedRequest._id,
+          type: 'assignment',
+          title: 'New Installation Assignment',
+          message: `You have been assigned to install the network at "${updatedRequest.requirements?.campusName || 'Campus'}". Please review the design and propose an installation date.`
+        });
+      } catch (notifError) {
+        console.error('Failed to create installer notification:', notifError);
+        // Don't fail the request if notification fails
+      }
+    }
+
+    // Create notification for assigned designer
+    if (assignedDesigner && assignedDesigner !== '' && updatedRequest.assignedDesigner) {
+      try {
+        await createNotification({
+          user: updatedRequest.assignedDesigner._id,
+          request: updatedRequest._id,
+          type: 'assignment',
+          title: 'New Design Assignment',
+          message: `You have been assigned to design the network for "${updatedRequest.requirements?.campusName || 'Campus'}".`
+        });
+      } catch (notifError) {
+        console.error('Failed to create designer notification:', notifError);
+        // Don't fail the request if notification fails
+      }
     }
 
     res.json({
@@ -433,13 +556,209 @@ router.put('/:id/response', [
   }
 });
 
+// @route   PUT /api/requests/:id/schedule-installation
+// @desc    Schedule installation date (Installer only)
+// @access  Private (Network Installation Team only)
+router.put('/:id/schedule-installation', [
+  auth,
+  authorize('Network Installation Team'),
+  body('scheduledInstallationDate').isISO8601().withMessage('Valid date is required'),
+  body('installationNotes').optional().isString().withMessage('Installation notes must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: errors.array() 
+      });
+    }
+
+    const { scheduledInstallationDate, installationNotes } = req.body;
+    const request = await Request.findById(req.params.id);
+
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    // Check if installer is assigned to this request
+    if (request.assignedInstaller?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied. You are not assigned to this request.' });
+    }
+
+    // Update scheduling information
+    request.scheduledInstallationDate = new Date(scheduledInstallationDate);
+    if (installationNotes) {
+      request.installationNotes = installationNotes;
+    }
+
+    await request.save();
+    await request.populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email');
+
+    // Notify admin and client about the proposed installation date
+    try {
+      const formattedDate = new Date(scheduledInstallationDate).toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      // Notify client
+      if (request.client) {
+        await createNotification({
+          user: request.client._id,
+          request: request._id,
+          type: 'assignment',
+          title: 'Installation Date Proposed',
+          message: `The installation team has proposed ${formattedDate} for installation at "${request.requirements?.campusName || 'your campus'}". Please review and confirm.`
+        });
+      }
+
+      // Notify all admins
+      const webAdmins = await User.find({ role: 'Web Admin' });
+      await Promise.all(webAdmins.map(admin => createNotification({
+        user: admin._id,
+        request: request._id,
+        type: 'assignment',
+        title: 'Installation Date Proposed',
+        message: `Installer has proposed ${formattedDate} for installation at "${request.requirements?.campusName || 'Campus'}".`
+      })));
+    } catch (notifError) {
+      console.error('Failed to create scheduling notifications:', notifError);
+      // Don't fail the request if notification fails
+    }
+
+    res.json({
+      message: 'Installation date proposed successfully. Admin and client have been notified.',
+      request
+    });
+  } catch (error) {
+    console.error('Schedule installation error:', error);
+    res.status(500).json({ message: 'Server error scheduling installation' });
+  }
+});
+
+// @route   PUT /api/requests/:id/installation-progress
+// @desc    Update installation progress (Installer only)
+// @access  Private (Network Installation Team only)
+router.put('/:id/installation-progress', [
+  auth,
+  authorize('Network Installation Team'),
+  body('installationProgress').isInt({ min: 0, max: 100 }).withMessage('Progress must be between 0 and 100'),
+  body('installationNotes').optional().isString().withMessage('Installation notes must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: errors.array() 
+      });
+    }
+
+    const { installationProgress, installationNotes } = req.body;
+    const request = await Request.findById(req.params.id);
+
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    // Check if installer is assigned to this request
+    if (request.assignedInstaller?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied. You are not assigned to this request.' });
+    }
+
+    // Update installation progress
+    request.installationProgress = installationProgress;
+    if (installationNotes) {
+      request.installationNotes = installationNotes;
+    }
+
+    // If starting installation, set start date
+    if (request.status !== 'Installation In Progress' && installationProgress > 0) {
+      request.status = 'Installation In Progress';
+      request.installationStartDate = new Date();
+    }
+
+    await request.save();
+    await request.populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email');
+
+    res.json({
+      message: 'Installation progress updated successfully',
+      request
+    });
+  } catch (error) {
+    console.error('Update installation progress error:', error);
+    res.status(500).json({ message: 'Server error updating installation progress' });
+  }
+});
+
+// @route   PUT /api/requests/:id/complete-installation
+// @desc    Complete installation with notes (Installer only)
+// @access  Private (Network Installation Team only)
+router.put('/:id/complete-installation', [
+  auth,
+  authorize('Network Installation Team'),
+  body('completionNotes').optional().isString().withMessage('Completion notes must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: errors.array() 
+      });
+    }
+
+    const { completionNotes } = req.body;
+    const request = await Request.findById(req.params.id);
+
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    // Check if installer is assigned to this request
+    if (request.assignedInstaller?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied. You are not assigned to this request.' });
+    }
+
+    // Check if installation is in progress
+    if (request.status !== 'Installation In Progress') {
+      return res.status(400).json({ message: 'Installation must be in progress to mark as complete.' });
+    }
+
+    // Update completion information
+    request.status = 'Completed';
+    request.actualCompletionDate = new Date();
+    request.progress = 100;
+    request.installationProgress = 100;
+    if (completionNotes) {
+      request.completionNotes = completionNotes;
+    }
+
+    await request.save();
+    await request.populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email');
+
+    res.json({
+      message: 'Installation completed successfully',
+      request
+    });
+  } catch (error) {
+    console.error('Complete installation error:', error);
+    res.status(500).json({ message: 'Server error completing installation' });
+  }
+});
+
 router.put('/:id/complete-by-client', auth, async (req, res) => {
-    try {
-      const request = await Request.findById(req.params.id);
+   try {
+     const request = await Request.findById(req.params.id);
   
-      if (!request) {
-        return res.status(404).json({ message: 'Request not found' });
-      }
+     if (!request) {
+       return res.status(404).json({ message: 'Request not found' });
+     }
   
       // Ensure the client field is populated if not already
       // This handles the case where request.client might be an ObjectId, not a full document
@@ -447,22 +766,22 @@ router.put('/:id/complete-by-client', auth, async (req, res) => {
           await request.populate('client');
       }
   
-      // Check if user is the client and request is in the right status
-      if (request.client.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: 'Access denied. You are not the client for this request.' });
-      }
+     // Check if user is the client and request is in the right status
+     if (request.client.toString() !== req.user._id.toString()) {
+       return res.status(403).json({ message: 'Access denied. You are not the client for this request.' });
+     }
       
-      // Check for the new status 'Awaiting Client Review'
-      if (request.status !== 'Awaiting Client Review') {
-        return res.status(400).json({ message: `Request status must be 'Awaiting Client Review' to be marked complete. Current status: ${request.status}` });
-      }
+     // Check for the new status 'Awaiting Client Review'
+     if (request.status !== 'Awaiting Client Review') {
+       return res.status(400).json({ message: `Request status must be 'Awaiting Client Review' to be marked complete. Current status: ${request.status}` });
+     }
   
-      // Update the request status to Final Completed
-      request.status = 'Completed';
-      request.actualCompletionDate = new Date();
+     // Update the request status to Final Completed
+     request.status = 'Completed';
+     request.actualCompletionDate = new Date();
       // Also update progress to 100%
       request.progress = 100;
-      await request.save();
+     await request.save();
   
       // NOTE: You may want to add logic here to notify the Admin and/or Installer 
       // that the client has approved and marked the project as complete.
