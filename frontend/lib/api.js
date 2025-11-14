@@ -56,7 +56,12 @@ export const requestsAPI = {
   addResponse: (id, responseData) => api.put(`/requests/${id}/response`, responseData),
   updateStatus: (id, status) => api.put(`/requests/${id}/status`, { status }),
   // --- NEW: Client marks as complete ---
-  markClientComplete: (id) => api.put(`/requests/${id}/complete-by-client`),};
+  markClientComplete: (id) => api.put(`/requests/${id}/complete-by-client`),
+  // --- NEW: Installer endpoints ---
+  scheduleInstallation: (id, data) => api.put(`/requests/${id}/schedule-installation`, data),
+  updateInstallationProgress: (id, data) => api.put(`/requests/${id}/installation-progress`, data),
+  completeInstallation: (id, data) => api.put(`/requests/${id}/complete-installation`, data),
+};
 
 // Notifications API
 export const notificationsAPI = {
@@ -72,6 +77,7 @@ export const adminAPI = {
   createDevice: (deviceData) => api.post('/admin/devices', deviceData),
   updateDevice: (id, deviceData) => api.put(`/admin/devices/${id}`, deviceData),
   deleteDevice: (id) => api.delete(`/admin/devices/${id}`),
+  seedDevices: () => api.post('/admin/devices/seed'),
   getUsers: (params = {}) => api.get('/admin/users', { params }),
   getStats: () => api.get('/admin/stats'),
 };

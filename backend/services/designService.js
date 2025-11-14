@@ -64,6 +64,11 @@ const calculateHardwareRequirements = async (departmentHosts) => {
   
   // Get available devices
   const devices = await Device.find({ isActive: true });
+  
+  if (!devices || devices.length === 0) {
+    throw new Error('Device catalog is empty! Please add devices to the catalog before generating designs. Go to Admin Dashboard > Device Catalog and click "Seed Sample Devices" to populate the catalog.');
+  }
+  
   const deviceMap = {};
   devices.forEach(device => {
     deviceMap[device.type] = deviceMap[device.type] || [];
@@ -73,11 +78,19 @@ const calculateHardwareRequirements = async (departmentHosts) => {
   // Calculate total hosts across all departments
   const totalWiredHosts = Object.values(departmentHosts).reduce((sum, dept) => sum + dept.wiredHosts, 0);
   const totalWirelessHosts = Object.values(departmentHosts).reduce((sum, dept) => sum + dept.wirelessHosts, 0);
+  
+  // Required device types
+  const requiredDeviceTypes = ['Router', 'CoreSwitch', 'DistributionSwitch', 'AccessSwitch', 'AccessPoint'];
+  const missingDeviceTypes = requiredDeviceTypes.filter(type => !deviceMap[type] || deviceMap[type].length === 0);
+  
+  if (missingDeviceTypes.length > 0) {
+    throw new Error(`Missing required device types in catalog: ${missingDeviceTypes.join(', ')}. Please add at least one device of each type to the Device Catalog.`);
+  }
+  
   const getDeviceData = (type) => {
     const device = deviceMap[type] && deviceMap[type].length > 0 ? deviceMap[type][0] : null;
     if (!device || !device._id || typeof device.unitPrice !== 'number' || device.unitPrice <= 0) {
-        console.warn(`WARNING: Skipping ${type} - Device not found or invalid price.`);
-        return null;
+        throw new Error(`${type} device found but has invalid data (missing ID or invalid price). Please check the device catalog.`);
     }
     return device;
   };

@@ -24,28 +24,31 @@ const requestSchema = new mongoose.Schema({
       type: String,
       required: [true, 'Campus name is required']
     },
-    departments: [{
-      name: {
-        type: String,
-        required: true
-      },
-      rooms: [{
+    departments: {
+      type: [{
         name: {
           type: String,
           required: true
         },
-        wiredHosts: {
-          type: Number,
-          default: 0,
-          min: 0
-        },
-        wirelessHosts: {
-          type: Number,
-          default: 0,
-          min: 0
-        }
-      }]
-    }],
+        rooms: [{
+          name: {
+            type: String,
+            required: true
+          },
+          wiredHosts: {
+            type: Number,
+            default: 0,
+            min: 0
+          },
+          wirelessHosts: {
+            type: Number,
+            default: 0,
+            min: 0
+          }
+        }]
+      }],
+      default: []
+    },
     additionalRequirements: {
       type: String,
       trim: true
@@ -71,6 +74,27 @@ const requestSchema = new mongoose.Schema({
     min: 0,
     max: 100,
     default: 0
+  },
+  // Installation scheduling and tracking
+  scheduledInstallationDate: {
+    type: Date
+  },
+  installationNotes: {
+    type: String,
+    trim: true
+  },
+  installationStartDate: {
+    type: Date
+  },
+  installationProgress: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
+  },
+  completionNotes: {
+    type: String,
+    trim: true
   },
   adminResponse: {
     type: String,

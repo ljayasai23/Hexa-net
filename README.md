@@ -52,7 +52,7 @@ A comprehensive network planning application for colleges and universities that 
    
    Create a `.env` file in the `backend` directory:
    ```env
-   MONGODB_URI=mongodb://localhost:27017/campus-net-planner
+   MONGO_URI=mongodb://localhost:27017/campus-net-planner
    JWT_SECRET=your_jwt_secret_key_here
    PORT=5000
    ```

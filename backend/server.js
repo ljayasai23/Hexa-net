@@ -1,6 +1,7 @@
-const dotenv = require('dotenv'); // <-- THIS LINE WAS MISSING
+const dotenv = require('dotenv');
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
@@ -13,7 +14,17 @@ app.use(cors());
 app.use(express.json());
 // Middleware
 
+// Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+const designsDir = path.join(uploadsDir, 'designs');
+const reportsDir = path.join(uploadsDir, 'reports');
+[uploadsDir, designsDir, reportsDir].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/requests', require('./routes/requests'));

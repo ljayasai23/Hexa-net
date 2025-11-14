@@ -5,6 +5,7 @@ import { requestsAPI, designsAPI } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { formatRequestType, getRequestTypeBadgeColor, getRequestTypeIcon } from '../utils/requestUtils';
 
 export default function ProjectDetail() {
   const router = useRouter();
@@ -94,9 +95,14 @@ export default function ProjectDetail() {
           </svg>
           Back to Projects
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Project: {request.requirements.campusName}
-        </h1>
+        <div className="flex items-center space-x-3 mb-2">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Project: {request.requirements.campusName}
+          </h1>
+          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getRequestTypeBadgeColor(request.requestType)}`}>
+            {getRequestTypeIcon(request.requestType)} {formatRequestType(request.requestType)}
+          </span>
+        </div>
         <p className="text-gray-600">
           Project ID: {id}
         </p>
@@ -105,6 +111,14 @@ export default function ProjectDetail() {
       <div className="card">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Project Information</h2>
         <div className="space-y-4">
+          
+          {/* Request Type Display */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Request Type</h4>
+            <p className="text-lg font-semibold text-gray-900">
+              {formatRequestType(request.requestType)}
+            </p>
+          </div>
           
           {/* Status Display */}
           <div>

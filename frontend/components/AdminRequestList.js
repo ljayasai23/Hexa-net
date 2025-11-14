@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { requestsAPI, adminAPI, designsAPI } from '../lib/api';
 import toast from 'react-hot-toast';
 import LoadingSpinner from './LoadingSpinner';
+import { formatRequestType, getRequestTypeBadgeColor, getRequestTypeIcon } from '../utils/requestUtils';
 
 // ------------------- MAIN COMPONENT -------------------
 export default function AdminRequestList() {
@@ -68,6 +69,7 @@ export default function AdminRequestList() {
           <thead className="bg-gray-50">
             <tr>
               <th className="table-header">Campus</th>
+              <th className="table-header">Request Type</th>
               <th className="table-header">Client</th>
               <th className="table-header">Status</th>
               <th className="table-header">Designer</th>
@@ -83,6 +85,11 @@ export default function AdminRequestList() {
               <tr key={request._id}>
                 <td className="table-cell font-medium">
                   {request.requirements.campusName}
+                </td>
+                <td className="table-cell">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRequestTypeBadgeColor(request.requestType)}`}>
+                    {getRequestTypeIcon(request.requestType)} {formatRequestType(request.requestType)}
+                  </span>
                 </td>
                 <td className="table-cell">{request.client?.name || 'Unknown'}</td>
                 <td className="table-cell">

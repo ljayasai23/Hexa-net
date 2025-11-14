@@ -1,15 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { designsAPI, requestsAPI } from '../lib/api';
 import toast from 'react-hot-toast';
 import MermaidDiagram from './MermaidDiagram';
 import BillOfMaterialsTable from './BillOfMaterialsTable';
 import IpPlanTable from './IpPlanTable';
+import { formatRequestType, getRequestTypeBadgeColor, getRequestTypeIcon } from '../utils/requestUtils';
 
 export default function DesignerRequestList({ requests, onRequestUpdated }) {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [design, setDesign] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showDesignModal, setShowDesignModal] = useState(false);
+  const [localRequests, setLocalRequests] = useState(requests);
+
+  // Update local requests when props change
+  useEffect(() => {
+    setLocalRequests(requests);
+  }, [requests]);
 
   // DesignerRequestList.js (Inside handleGenerateDesign)
 
@@ -17,27 +24,34 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
     setLoading(true);
     try {
       const response = await designsAPI.generate(requestId);
+      const generatedDesign = response.data.design;
       
-      // CRITICAL FIX: Ensure the state update waits for the response
-      const updatedDesign = await LogicDesign.findByIdAndUpdate(
-        logicDesign._id,
-        { reportPdfUrl: pdfUrl },
-        { new: true, runValidators: true } // Run validators just in case
-    );
-    
-    if (!updatedDesign) {
-        // If the update fails, throw a clear error to the console
-        console.error("CRITICAL: Failed to update LogicDesign document with PDF URL.");
-        return res.status(500).json({ message: 'Internal error saving PDF link to database.' });
-    }
+      // Immediately update the local requests state to reflect the design
+      // This ensures the button changes immediately without waiting for the API call
+      setLocalRequests(prevRequests => 
+        prevRequests.map(req => 
+          req._id === requestId 
+            ? { ...req, design: generatedDesign._id || generatedDesign } 
+            : req
+        )
+      );
       
-      setDesign(updatedDesign); // Sets the state with the fresh URL
+      // Set the design state to show in modal
+      setDesign(generatedDesign);
       setShowDesignModal(true);
-      onRequestUpdated();
+      
+      // Refresh the requests list in the background to ensure consistency
+      // Don't await this - let it happen in the background
+      if (typeof onRequestUpdated === 'function') {
+        onRequestUpdated().catch(err => {
+          console.error('Error refreshing requests:', err);
+        });
+      }
+      
       toast.success('Design generated and PDF created!');
     } catch (error) {
       // Show the explicit error if the PDF URL wasn't returned
-      toast.error('Failed to generate design: ' + (error.message || 'Check server logs.'));
+      toast.error('Failed to generate design: ' + (error.response?.data?.message || error.message || 'Check server logs.'));
     } finally {
       setLoading(false);
     }
@@ -132,7 +146,7 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
     }
   };
 
-  if (requests.length === 0) {
+  if (localRequests.length === 0) {
     return (
       <div className="text-center py-8">
         <p className="text-gray-500">No assigned requests found.</p>
@@ -145,18 +159,25 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
       <h2 className="text-xl font-semibold text-gray-900">Assigned Requests</h2>
       
       <div className="grid gap-6">
-        {requests.map((request) => (
+        {localRequests.map((request) => (
           <div key={request._id} className="card">
             <div className="flex justify-between items-start">
               <div className="flex-1">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {request.requirements.campusName}
-                </h3>
+                <div className="flex items-center space-x-2 mb-2">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {request.requirements.campusName}
+                  </h3>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRequestTypeBadgeColor(request.requestType)}`}>
+                    {getRequestTypeIcon(request.requestType)} {formatRequestType(request.requestType)}
+                  </span>
+                </div>
                 <p className="text-sm text-gray-600">
                   Client: {request.client?.name}
                 </p>
                 <p className="text-sm text-gray-600">
-                  Departments: {request.requirements.departments.length}
+                  {request.requestType === 'Installation Only' 
+                    ? 'Installation Only Request' 
+                    : `Departments: ${request.requirements.departments.length}`}
                 </p>
                 <div className="mt-2">
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

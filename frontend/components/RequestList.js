@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'; // <-- 1. FIX (useEffect was missin
 import { useRouter } from 'next/router';
 import { requestsAPI, designsAPI } from '../lib/api'; 
 import toast from 'react-hot-toast'; 
-import LoadingSpinner from './LoadingSpinner'; 
+import LoadingSpinner from './LoadingSpinner';
+import { formatRequestType, getRequestTypeBadgeColor, getRequestTypeIcon } from '../utils/requestUtils'; 
 
 const statusColors = {
   'New': 'bg-yellow-100 text-yellow-800',
@@ -59,56 +60,66 @@ export default function RequestList({ requests }) {
   }
 
   return (
-    <div className="overflow-hidden">
+    <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <th className="table-header">Campus Name</th>
-            <th className="table-header">Status</th>
-            <th className="table-header">Priority</th>
-            <th className="table-header">Departments</th>
-            <th className="table-header">Created</th>
-            <th className="table-header">Actions</th>
+            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Campus</th>
+            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Type</th>
+            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Status</th>
+            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Priority</th>
+            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Depts</th>
+            <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Created</th>
+            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Actions</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {requests.map((request) => (
             <tr key={request._id} className="hover:bg-gray-50">
-              <td className="table-cell font-medium">
+              <td className="px-3 py-2 text-sm font-medium text-gray-900 truncate" title={request.requirements.campusName}>
                 {request.requirements.campusName}
               </td>
-              <td className="table-cell">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[request.status]}`}>
+              <td className="px-2 py-2 text-sm">
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${getRequestTypeBadgeColor(request.requestType)}`}>
+                  <span className="mr-1">{getRequestTypeIcon(request.requestType)}</span>
+                  <span className="hidden sm:inline">{formatRequestType(request.requestType)}</span>
+                  <span className="sm:hidden">{formatRequestType(request.requestType).split(' ')[0]}</span>
+                </span>
+              </td>
+              <td className="px-2 py-2 text-sm">
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${statusColors[request.status]}`}>
                   {request.status}
                 </span>
               </td>
-              <td className="table-cell">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${priorityColors[request.priority]}`}>
+              <td className="px-2 py-2 text-sm">
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${priorityColors[request.priority]}`}>
                   {request.priority}
                 </span>
               </td>
-              <td className="table-cell">
-                {request.requirements.departments.length} department{request.requirements.departments.length !== 1 ? 's' : ''}
+              <td className="px-2 py-2 text-sm text-gray-600">
+                {request.requestType === 'Installation Only' 
+                  ? 'N/A' 
+                  : `${request.requirements.departments.length} dept${request.requirements.departments.length !== 1 ? 's' : ''}`}
               </td>
-              <td className="table-cell text-gray-500">
-                {new Date(request.createdAt).toLocaleDateString()}
+              <td className="px-2 py-2 text-xs text-gray-500 whitespace-nowrap">
+                {new Date(request.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </td>
               
-              <td className="table-cell">
+              <td className="px-3 py-2 text-sm whitespace-nowrap">
                 {request.status === 'Awaiting Client Review' ? (
                   <button
                     onClick={() => {
                       setSelectedRequest(request);
                       setShowClientReviewModal(true);
                     }}
-                    className="text-green-600 hover:text-green-900 text-sm font-medium"
+                    className="text-green-600 hover:text-green-900 text-xs font-medium px-1 py-0.5 hover:underline"
                   >
                     Review PDF
                   </button>
                 ) : (
                   <button
                     onClick={() => handleViewRequest(request._id)}
-                    className="text-primary-600 hover:text-primary-900 text-sm font-medium"
+                    className="text-primary-600 hover:text-primary-900 text-xs font-medium px-1 py-0.5 hover:underline"
                   >
                     View Details
                   </button>
