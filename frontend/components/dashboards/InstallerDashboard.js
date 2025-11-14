@@ -237,6 +237,7 @@ export default function InstallerDashboard() {
             <div className="space-y-2">
               {assignmentNotifications.map((notification) => {
                 if (!notification || !notification._id) return null;
+                const scheduledDate = notification.project?.scheduledInstallationDate;
                 return (
                   <div key={notification._id} className="flex items-start justify-between p-3 bg-white rounded-lg border border-yellow-200">
                     <div className="flex-1">
@@ -246,6 +247,18 @@ export default function InstallerDashboard() {
                       <p className="text-xs text-gray-600 mt-1">
                         {notification.message || 'You have been assigned to a new project.'}
                       </p>
+                      {scheduledDate && (
+                        <p className="text-xs text-indigo-600 font-medium mt-1">
+                          📅 Scheduled Installation: {new Date(scheduledDate).toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      )}
                       {notification.createdAt && (
                         <p className="text-xs text-gray-500 mt-1">
                           {new Date(notification.createdAt).toLocaleString()}

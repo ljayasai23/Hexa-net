@@ -360,14 +360,18 @@ body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design
 
     // Create notifications
     if (updatedRequest.client) {
-      const notification = new Notification({
-        user: updatedRequest.client._id,
-        project: updatedRequest._id,
-        type: 'assignment',
-        title: 'Project Assignment Update',
-        message: `Your project "${updatedRequest.requirements?.campusName || 'Network Request'}" has been updated. Status: ${updatedRequest.status}`
-      });
-      await notification.save();
+      try {
+        await createNotification({
+          user: updatedRequest.client._id,
+          request: updatedRequest._id,
+          type: 'assignment',
+          title: 'Project Assignment Update',
+          message: `Your project "${updatedRequest.requirements?.campusName || 'Network Request'}" has been updated. Status: ${updatedRequest.status}`
+        });
+      } catch (notifError) {
+        console.error('Failed to create client notification:', notifError);
+        // Don't fail the request if notification fails
+      }
     }
 
     // Create notification for assigned installer
@@ -536,14 +540,18 @@ router.put('/:id/response', [
 
     // Create notification for the client
     if (updatedRequest.client) {
-      const notification = new Notification({
-        user: updatedRequest.client._id,
-        project: updatedRequest._id,
-        type: 'response',
-        title: 'Admin Response',
-        message: `You have received a response from the admin for your project "${updatedRequest.title || 'Network Request'}"`
-      });
-      await notification.save();
+      try {
+        await createNotification({
+          user: updatedRequest.client._id,
+          request: updatedRequest._id,
+          type: 'response',
+          title: 'Admin Response',
+          message: `You have received a response from the admin for your project "${updatedRequest.title || 'Network Request'}"`
+        });
+      } catch (notifError) {
+        console.error('Failed to create client notification:', notifError);
+        // Don't fail the request if notification fails
+      }
     }
 
     res.json({

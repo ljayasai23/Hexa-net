@@ -37,7 +37,7 @@ const createNotification = async ({ user, request, type, title, message }) => {
 router.get('/', auth, async (req, res) => {
   try {
     const notifications = await Notification.find({ user: req.user.id })
-      .populate('project', 'title status progress')
+      .populate('project', 'title status progress scheduledInstallationDate requirements')
       .sort({ createdAt: -1 })
       .limit(50);
 
