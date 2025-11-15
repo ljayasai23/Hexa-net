@@ -349,8 +349,37 @@ body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design
           break;
       }
     }
-    if (assignedDesigner && assignedDesigner !== '') updateData.assignedDesigner = assignedDesigner;
-    if (assignedInstaller && assignedInstaller !== '') updateData.assignedInstaller = assignedInstaller;
+    // Only update assignments if they are provided and different from current
+    // Allow unassigning by passing empty string
+    if (assignedDesigner !== undefined) {
+      if (assignedDesigner === '' || assignedDesigner === null) {
+        // Unassign designer
+        updateData.assignedDesigner = null;
+      } else if (assignedDesigner !== '') {
+        // Check if designer is already assigned and trying to assign a different one
+        if (request.assignedDesigner && request.assignedDesigner.toString() !== assignedDesigner) {
+          return res.status(400).json({ 
+            message: 'Designer is already assigned to this request. Please unassign the current designer first.' 
+          });
+        }
+        updateData.assignedDesigner = assignedDesigner;
+      }
+    }
+    
+    if (assignedInstaller !== undefined) {
+      if (assignedInstaller === '' || assignedInstaller === null) {
+        // Unassign installer
+        updateData.assignedInstaller = null;
+      } else if (assignedInstaller !== '') {
+        // Check if installer is already assigned and trying to assign a different one
+        if (request.assignedInstaller && request.assignedInstaller.toString() !== assignedInstaller) {
+          return res.status(400).json({ 
+            message: 'Installer is already assigned to this request. Please unassign the current installer first.' 
+          });
+        }
+        updateData.assignedInstaller = assignedInstaller;
+      }
+    }
 
     const updatedRequest = await Request.findByIdAndUpdate(
       req.params.id,
