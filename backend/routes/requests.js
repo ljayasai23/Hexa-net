@@ -130,6 +130,43 @@ router.post('/', [
 
     await request.populate('client', 'name email');
 
+    // Create notifications after request is saved
+    const { createNotification } = require('../services/notificationService');
+    const User = require('../models/User');
+
+    // Notify the client (request creator)
+    try {
+      await createNotification({
+        user: req.user._id,
+        request: request._id,
+        type: 'response',
+        title: 'Request Submitted Successfully',
+        message: `Your network request for "${request.requirements?.campusName || 'Campus'}" has been submitted and is awaiting review.`
+      });
+    } catch (notifError) {
+      console.error('Failed to create client notification:', notifError);
+    }
+
+    // Notify all admins about the new request
+    try {
+      const admins = await User.find({ role: 'Web Admin' });
+      await Promise.all(admins.map(async (admin) => {
+        try {
+          await createNotification({
+            user: admin._id,
+            request: request._id,
+            type: 'response',
+            title: '🆕 New Project Request',
+            message: `New ${request.requestType} request received from ${req.user.name} for "${request.requirements?.campusName || 'Campus'}".`
+          });
+        } catch (notifError) {
+          console.error(`Failed to create notification for admin ${admin._id}:`, notifError);
+        }
+      }));
+    } catch (notifError) {
+      console.error('Error creating admin notifications:', notifError);
+    }
+
     res.status(201).json({
       message: 'Network request created successfully',
       request
@@ -175,10 +212,73 @@ router.get('/', auth, async (req, res) => {
         return res.status(403).json({ message: 'Access denied' });
     }
 
-    const requests = await Request.find(query)
+    let requests = await Request.find(query)
       .populate(populateFields, 'name email role')
-      .populate('design')
+      .populate('design', 'isApproved reportPdfUrl')
       .sort({ createdAt: -1 });
+
+    // AUTO-FIX: Update existing assigned projects that don't have installationProgress set
+    // This fixes projects that were assigned before the installationProgress initialization was added
+    const updatePromises = requests
+      .filter(request => {
+        // Check if installer is assigned but installationProgress is 0 or not set
+        const hasInstaller = request.assignedInstaller && (request.assignedInstaller._id || request.assignedInstaller);
+        const needsFix = (!request.installationProgress || request.installationProgress === 0) &&
+                         request.status !== 'Completed' &&
+                         request.status !== 'Installation In Progress';
+        
+        if (hasInstaller && needsFix) {
+          console.log(`🔧 Found project needing fix: ${request._id}, status: ${request.status}, installer: ${hasInstaller}, progress: ${request.installationProgress}`);
+        }
+        
+        return hasInstaller && needsFix;
+      })
+      .map(async (request) => {
+        try {
+          const updateData = { installationProgress: 10 };
+          
+          // Also update status to "Assigned" if it's in a design-complete state or any non-installation state
+          if (request.design && request.requestType === 'Both Design and Installation') {
+            if (request.status === 'Awaiting Client Review' || request.status === 'Design Complete' || request.status === 'Design Submitted' || request.status === 'Design In Progress') {
+              updateData.status = 'Assigned';
+              // Update overall progress if needed
+              const currentProgress = request.progress || 0;
+              if (currentProgress < 60) {
+                updateData.progress = Math.min(currentProgress + 10, 100);
+              }
+            }
+          } else if (request.requestType === 'Installation Only') {
+            if (request.status === 'New' || !request.status) {
+              updateData.status = 'Assigned';
+              updateData.progress = 20;
+            }
+          } else {
+            // For any other case, just ensure status is at least "Assigned" if it's "New"
+            if (request.status === 'New' || !request.status) {
+              updateData.status = 'Assigned';
+            }
+          }
+          
+          console.log(`🔄 Updating request ${request._id} with:`, updateData);
+          const result = await Request.findByIdAndUpdate(request._id, updateData, { new: true, runValidators: false });
+          console.log(`✅ Auto-fixed installation progress for request ${request._id}`, result?.installationProgress);
+          
+          // Update the request object in memory so the response includes the fix
+          Object.assign(request, updateData);
+        } catch (error) {
+          console.error(`❌ Failed to auto-fix request ${request._id}:`, error);
+        }
+      });
+
+    // Wait for all updates to complete (but don't block the response)
+    if (updatePromises.length > 0) {
+      await Promise.all(updatePromises);
+      // Re-fetch to ensure we have the latest data
+      requests = await Request.find(query)
+        .populate(populateFields, 'name email role')
+        .populate('design', 'isApproved reportPdfUrl')
+        .sort({ createdAt: -1 });
+    }
 
     res.json({ requests });
   } catch (error) {
@@ -233,6 +333,58 @@ router.get('/:id', auth, async (req, res) => {
       }
     }
 
+    // AUTO-FIX: Update existing assigned projects that don't have installationProgress set
+    const hasInstaller = request.assignedInstaller && (request.assignedInstaller._id || request.assignedInstaller);
+    const needsFix = hasInstaller && 
+                     (!request.installationProgress || request.installationProgress === 0) &&
+                     request.status !== 'Completed' &&
+                     request.status !== 'Installation In Progress';
+    
+    if (needsFix) {
+      console.log(`⚠️ Auto-fixing installation progress for request ${request._id}: Installer assigned but progress is 0, status: ${request.status}`);
+      try {
+        const updateData = { installationProgress: 10 };
+        
+        // Also update status to "Assigned" if it's in a design-complete state or any non-installation state
+        if (request.design && request.requestType === 'Both Design and Installation') {
+          if (request.status === 'Awaiting Client Review' || request.status === 'Design Complete' || request.status === 'Design Submitted' || request.status === 'Design In Progress') {
+            updateData.status = 'Assigned';
+            // Update overall progress if needed
+            const currentProgress = request.progress || 0;
+            if (currentProgress < 60) {
+              updateData.progress = Math.min(currentProgress + 10, 100);
+            }
+          }
+        } else if (request.requestType === 'Installation Only') {
+          if (request.status === 'New' || !request.status) {
+            updateData.status = 'Assigned';
+            updateData.progress = 20;
+          }
+        } else {
+          // For any other case, just ensure status is at least "Assigned" if it's "New"
+          if (request.status === 'New' || !request.status) {
+            updateData.status = 'Assigned';
+          }
+        }
+        
+        console.log(`🔄 Updating request ${request._id} with:`, updateData);
+        await Request.findByIdAndUpdate(request._id, updateData, { runValidators: false });
+        
+        // Re-fetch to get updated data
+        const updatedRequest = await Request.findById(req.params.id)
+          .populate('client', 'name email')
+          .populate('assignedDesigner', 'name email')
+          .populate('assignedInstaller', 'name email')
+          .populate('design');
+        if (updatedRequest) {
+          Object.assign(request, updatedRequest.toObject());
+          console.log(`✅ Auto-fixed installation progress for request ${request._id}, new progress: ${request.installationProgress}`);
+        }
+      } catch (fixError) {
+        console.error(`❌ Failed to auto-fix installation progress for request ${request._id}:`, fixError);
+      }
+    }
+
     // Check access permissions
     const canAccess = 
       request.client._id.toString() === req.user._id.toString() ||
@@ -283,7 +435,8 @@ body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design
     }
 
     const { assignedDesigner, assignedInstaller, status } = req.body;
-    const request = await Request.findById(req.params.id);
+    const request = await Request.findById(req.params.id)
+      .populate('design', 'isApproved');
 
     if (!request) {
       return res.status(404).json({ message: 'Request not found' });
@@ -349,8 +502,76 @@ body('status').optional().isIn(['New', 'Assigned', 'Design In Progress', 'Design
           break;
       }
     }
-    if (assignedDesigner && assignedDesigner !== '') updateData.assignedDesigner = assignedDesigner;
-    if (assignedInstaller && assignedInstaller !== '') updateData.assignedInstaller = assignedInstaller;
+    // Only update assignments if they are provided and different from current
+    // Allow unassigning by passing empty string
+    if (assignedDesigner !== undefined) {
+      if (assignedDesigner === '' || assignedDesigner === null) {
+        // Unassign designer
+        updateData.assignedDesigner = null;
+      } else if (assignedDesigner !== '') {
+        // Check if designer is already assigned and trying to assign a different one
+        if (request.assignedDesigner && request.assignedDesigner.toString() !== assignedDesigner) {
+          return res.status(400).json({ 
+            message: 'Designer is already assigned to this request. Please unassign the current designer first.' 
+          });
+        }
+        updateData.assignedDesigner = assignedDesigner;
+      }
+    }
+    
+    if (assignedInstaller !== undefined) {
+      if (assignedInstaller === '' || assignedInstaller === null) {
+        // Unassign installer
+        updateData.assignedInstaller = null;
+      } else if (assignedInstaller !== '') {
+        // Check if installer is already assigned and trying to assign a different one
+        if (request.assignedInstaller && request.assignedInstaller.toString() !== assignedInstaller) {
+          return res.status(400).json({ 
+            message: 'Installer is already assigned to this request. Please unassign the current installer first.' 
+          });
+        }
+        updateData.assignedInstaller = assignedInstaller;
+        
+        // If assigning installer, update status and progress appropriately
+        // Only update status if it's not explicitly being changed
+        if (!updateData.status) {
+          // Check if design exists (for "Both Design and Installation" requests)
+          if (request.design && request.requestType === 'Both Design and Installation') {
+            // Design is complete, installer is being assigned - set status to indicate installer assignment
+            if (request.status === 'Awaiting Client Review' || request.status === 'Design Complete' || request.status === 'Design Submitted' || request.status === 'Design In Progress') {
+              updateData.status = 'Assigned'; // Status indicates installer is now assigned
+              // Update progress: add 10% when installer is assigned (design phase is complete)
+              const currentProgress = request.progress || 0;
+              updateData.progress = Math.min(currentProgress + 10, 100);
+              // Set installation progress to 10% to indicate installer assignment
+              updateData.installationProgress = 10;
+            }
+          } else if (request.requestType === 'Installation Only') {
+            // For Installation Only, when installer is assigned, set status to Assigned
+            if (request.status === 'New' || !request.status) {
+              updateData.status = 'Assigned';
+              updateData.progress = 20;
+              // Set installation progress to 10% to indicate installer assignment
+              updateData.installationProgress = 10;
+            }
+          } else {
+            // For any other case where installer is assigned, ensure status is at least "Assigned"
+            if (request.status === 'New' || !request.status) {
+              updateData.status = 'Assigned';
+            }
+            // Initialize installation progress if not set
+            if (!request.installationProgress || request.installationProgress === 0) {
+              updateData.installationProgress = 10;
+            }
+          }
+        } else {
+          // Status is being explicitly changed, but still initialize installation progress if needed
+          if (!request.installationProgress || request.installationProgress === 0) {
+            updateData.installationProgress = 10;
+          }
+        }
+      }
+    }
 
     const updatedRequest = await Request.findByIdAndUpdate(
       req.params.id,
@@ -757,6 +978,69 @@ router.put('/:id/complete-installation', [
   } catch (error) {
     console.error('Complete installation error:', error);
     res.status(500).json({ message: 'Server error completing installation' });
+  }
+});
+
+// @route   POST /api/requests/fix-installation-progress
+// @desc    Manually fix installation progress for all assigned projects (Admin only)
+// @access  Private (Web Admin only)
+router.post('/fix-installation-progress', [
+  auth,
+  authorize('Web Admin')
+], async (req, res) => {
+  try {
+    // Find all requests with assigned installer but installationProgress is 0 or not set
+    const requestsToFix = await Request.find({
+      assignedInstaller: { $exists: true, $ne: null },
+      $or: [
+        { installationProgress: { $exists: false } },
+        { installationProgress: 0 }
+      ],
+      status: { $nin: ['Completed', 'Installation In Progress'] }
+    }).populate('design', 'isApproved');
+
+    console.log(`🔧 Found ${requestsToFix.length} requests to fix`);
+
+    const fixedRequests = [];
+    for (const request of requestsToFix) {
+      try {
+        const updateData = { installationProgress: 10 };
+        
+        // Also update status to "Assigned" if it's in a design-complete state
+        if (request.design && request.requestType === 'Both Design and Installation') {
+          if (request.status === 'Awaiting Client Review' || request.status === 'Design Complete' || request.status === 'Design Submitted' || request.status === 'Design In Progress') {
+            updateData.status = 'Assigned';
+            const currentProgress = request.progress || 0;
+            if (currentProgress < 60) {
+              updateData.progress = Math.min(currentProgress + 10, 100);
+            }
+          }
+        } else if (request.requestType === 'Installation Only') {
+          if (request.status === 'New' || !request.status) {
+            updateData.status = 'Assigned';
+            updateData.progress = 20;
+          }
+        } else {
+          if (request.status === 'New' || !request.status) {
+            updateData.status = 'Assigned';
+          }
+        }
+        
+        await Request.findByIdAndUpdate(request._id, updateData, { runValidators: false });
+        fixedRequests.push({ id: request._id, status: request.status, updateData });
+        console.log(`✅ Fixed request ${request._id}`);
+      } catch (error) {
+        console.error(`❌ Failed to fix request ${request._id}:`, error);
+      }
+    }
+
+    res.json({
+      message: `Fixed ${fixedRequests.length} out of ${requestsToFix.length} requests`,
+      fixed: fixedRequests
+    });
+  } catch (error) {
+    console.error('Fix installation progress error:', error);
+    res.status(500).json({ message: 'Server error fixing installation progress' });
   }
 });
 

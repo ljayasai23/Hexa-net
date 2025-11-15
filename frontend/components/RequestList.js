@@ -194,7 +194,7 @@ const ClientReviewModal = ({ request, onAccept, onClose }) => {
 
         {loadingDesign ? (
           <LoadingSpinner />
-        ) : design && design.reportPdfUrl ? (
+        ) : design && design.reportPdfUrl && design.isApproved ? (
           <div className="space-y-4">
             <p>
               <strong>Status:</strong> Awaiting Your Review

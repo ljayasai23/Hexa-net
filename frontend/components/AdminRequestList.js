@@ -157,15 +157,34 @@ export default function AdminRequestList() {
                 </td>
 
                 <td className="table-cell">
-                  <button
-                    onClick={() => {
-                      setSelectedRequest(request);
-                      setShowAssignModal(true);
-                    }}
-                    className="text-primary-600 hover:text-primary-900 text-sm font-medium"
-                  >
-                    Assign
-                  </button>
+                  {/* Disable assign button based on request type and current assignments */}
+                  {(() => {
+                    const requestType = request.requestType;
+                    const isFullyAssigned = 
+                      (requestType === 'Installation Only' && request.assignedInstaller) ||
+                      (requestType === 'Design Only' && request.assignedDesigner) ||
+                      (requestType === 'Both Design and Installation' && request.assignedDesigner && request.assignedInstaller);
+                    
+                    if (isFullyAssigned) {
+                      return (
+                        <span className="text-gray-400 text-sm font-medium cursor-not-allowed">
+                          Fully Assigned
+                        </span>
+                      );
+                    }
+                    
+                    return (
+                      <button
+                        onClick={() => {
+                          setSelectedRequest(request);
+                          setShowAssignModal(true);
+                        }}
+                        className="text-primary-600 hover:text-primary-900 text-sm font-medium"
+                      >
+                        {request.assignedDesigner || request.assignedInstaller ? 'Update Assignment' : 'Assign'}
+                      </button>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}
@@ -216,7 +235,28 @@ const AssignModal = ({ request, users, onAssign, onClose }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onAssign(request._id, formData);
+    
+    // Only send assignments that are not already set
+    const assignmentData = {
+      status: formData.status,
+    };
+    
+    // Only include designer if it's not already assigned (or if we're changing it)
+    if (!request.assignedDesigner && formData.assignedDesigner) {
+      assignmentData.assignedDesigner = formData.assignedDesigner;
+    }
+    
+    // Only include installer if it's not already assigned (or if we're changing it)
+    if (!request.assignedInstaller && formData.assignedInstaller) {
+      assignmentData.assignedInstaller = formData.assignedInstaller;
+    }
+    
+    // Only submit if there's something to assign
+    if (assignmentData.assignedDesigner || assignmentData.assignedInstaller || assignmentData.status !== request.status) {
+      onAssign(request._id, assignmentData);
+    } else {
+      toast.error('No changes to assign');
+    }
   };
 
   return (
@@ -228,45 +268,103 @@ const AssignModal = ({ request, users, onAssign, onClose }) => {
           </h3>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Assign Designer
-              </label>
-              <select
-                value={formData.assignedDesigner}
-                onChange={(e) =>
-                  setFormData({ ...formData, assignedDesigner: e.target.value })
-                }
-                className="input-field"
-              >
-                <option value="">Select Designer</option>
-                {designers.map((designer) => (
-                  <option key={designer._id} value={designer._id}>
-                    {designer.name}
-                  </option>
-                ))}
-              </select>
+            {/* Show request type info */}
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4">
+              <p className="text-sm font-medium text-indigo-900 mb-1">Request Type:</p>
+              <p className="text-sm text-indigo-800 font-semibold">{request.requestType}</p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Assign Installer
-              </label>
-              <select
-                value={formData.assignedInstaller}
-                onChange={(e) =>
-                  setFormData({ ...formData, assignedInstaller: e.target.value })
-                }
-                className="input-field"
-              >
-                <option value="">Select Installer</option>
-                {installers.map((installer) => (
-                  <option key={installer._id} value={installer._id}>
-                    {installer.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Show current assignments */}
+            {(request.assignedDesigner || request.assignedInstaller) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <p className="text-sm font-medium text-blue-900 mb-2">Current Assignments:</p>
+                <div className="space-y-1 text-sm text-blue-800">
+                  {request.assignedDesigner && (
+                    <p>✓ Designer: <span className="font-semibold">{request.assignedDesigner.name}</span></p>
+                  )}
+                  {request.assignedInstaller && (
+                    <p>✓ Installer: <span className="font-semibold">{request.assignedInstaller.name}</span></p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Designer Assignment - Only show for "Design Only" or "Both Design and Installation" */}
+            {(request.requestType === 'Design Only' || request.requestType === 'Both Design and Installation') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Assign Designer
+                </label>
+                {request.assignedDesigner ? (
+                  <div className="space-y-2">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-sm text-green-800">
+                        <span className="font-semibold">Currently Assigned:</span> {request.assignedDesigner.name}
+                      </p>
+                    </div>
+                    <input type="hidden" value={request.assignedDesigner._id} name="assignedDesigner" />
+                    <p className="text-xs text-gray-500">
+                      Designer is already assigned. The assignment cannot be changed through this interface.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={formData.assignedDesigner}
+                    onChange={(e) =>
+                      setFormData({ ...formData, assignedDesigner: e.target.value })
+                    }
+                    className="input-field"
+                  >
+                    <option value="">Select Designer</option>
+                    {designers.map((designer) => (
+                      <option key={designer._id} value={designer._id}>
+                        {designer.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            {/* Installer Assignment - Show for "Installation Only" or "Both Design and Installation" */}
+            {(request.requestType === 'Installation Only' || request.requestType === 'Both Design and Installation') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Assign Installer
+                  {request.requestType === 'Both Design and Installation' && request.assignedDesigner && !request.assignedInstaller && (
+                    <span className="ml-2 text-xs text-green-600 font-medium">(Designer assigned ✓ - Ready for installer)</span>
+                  )}
+                </label>
+                {request.assignedInstaller ? (
+                  <div className="space-y-2">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-sm text-green-800">
+                        <span className="font-semibold">Currently Assigned:</span> {request.assignedInstaller.name}
+                      </p>
+                    </div>
+                    <input type="hidden" value={request.assignedInstaller._id} name="assignedInstaller" />
+                    <p className="text-xs text-gray-500">
+                      Installer is already assigned. The assignment cannot be changed through this interface.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={formData.assignedInstaller}
+                    onChange={(e) =>
+                      setFormData({ ...formData, assignedInstaller: e.target.value })
+                    }
+                    className="input-field"
+                  >
+                    <option value="">Select Installer</option>
+                    {installers.map((installer) => (
+                      <option key={installer._id} value={installer._id}>
+                        {installer.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700">

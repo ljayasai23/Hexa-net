@@ -10,7 +10,15 @@ dotenv.config({ path: './.env' });
 console.log('MONGO_URI from env:', process.env.MONGO_URI);
 
 const app = express();
-app.use(cors());
+
+// Configure CORS to allow requests from any origin (for development)
+// In production, you should specify allowed origins
+app.use(cors({
+  origin: true, // Allow all origins
+  credentials: true, // Allow cookies/credentials
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 // Middleware
 
@@ -54,7 +62,9 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces to accept connections from other machines
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Server is running on ${HOST}:${PORT}`);
+  console.log(`Access from other machines: http://<your-ip>:${PORT}`);
 });

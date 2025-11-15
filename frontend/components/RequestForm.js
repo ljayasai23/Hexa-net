@@ -508,22 +508,38 @@ export default function RequestForm({ onSuccess, onCancel }) {
                     placeholder="Room name (e.g., Lab 101, Office 205)"
                     required
                   />
-                  <input
-                    type="number"
-                    value={room.wiredHosts}
-                    onChange={(e) => updateRoom(deptIndex, roomIndex, 'wiredHosts', parseInt(e.target.value) || 0)}
-                    className="input-field w-24"
-                    placeholder="Wired"
-                    min="0"
-                  />
-                  <input
-                    type="number"
-                    value={room.wirelessHosts}
-                    onChange={(e) => updateRoom(deptIndex, roomIndex, 'wirelessHosts', parseInt(e.target.value) || 0)}
-                    className="input-field w-24"
-                    placeholder="Wireless"
-                    min="0"
-                  />
+                  <div className="relative w-28">
+                    <div className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <input
+                      type="number"
+                      value={room.wiredHosts}
+                      onChange={(e) => updateRoom(deptIndex, roomIndex, 'wiredHosts', parseInt(e.target.value) || 0)}
+                      className="input-field w-28 pl-8"
+                      placeholder="Wired"
+                      min="0"
+                      title="Wired connections (Ethernet)"
+                    />
+                  </div>
+                  <div className="relative w-28">
+                    <div className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                      </svg>
+                    </div>
+                    <input
+                      type="number"
+                      value={room.wirelessHosts}
+                      onChange={(e) => updateRoom(deptIndex, roomIndex, 'wirelessHosts', parseInt(e.target.value) || 0)}
+                      className="input-field w-28 pl-8"
+                      placeholder="Wireless"
+                      min="0"
+                      title="Wireless connections"
+                    />
+                  </div>
                   {department.rooms.length > 1 && (
                     <button
                       type="button"
