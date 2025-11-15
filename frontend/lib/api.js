@@ -1,19 +1,58 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+// Dynamically determine API URL based on current hostname
+// This function runs at runtime in the browser, not at build time
+const getApiUrl = () => {
+  // If running in browser, detect the hostname and use it for API
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const port = '5000';
+    
+    // If accessing via IP address (not localhost), use that IP for API
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      const apiUrl = `http://${hostname}:${port}/api`;
+      console.log('🌐 Using API URL:', apiUrl);
+      return apiUrl;
+    }
+  }
+  
+  // Check if we have an explicit API URL in environment (for build time)
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // Default fallback
+  const defaultUrl = 'http://localhost:5000/api';
+  console.log('🌐 Using default API URL:', defaultUrl);
+  return defaultUrl;
+};
 
-
-// Create axios instance
+// Create axios instance with dynamic baseURL
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: typeof window !== 'undefined' ? getApiUrl() : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'),
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor: dynamically set API URL and add auth token
 api.interceptors.request.use(
   (config) => {
+    // Recalculate API URL on each request to handle dynamic hostname changes
+    // This ensures it works when accessing from different machines
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const port = '5000';
+      
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        config.baseURL = `http://${hostname}:${port}/api`;
+        console.log('🌐 API Request to:', config.baseURL + config.url);
+      } else {
+        config.baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      }
+    }
+    
+    // Add auth token if available
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
