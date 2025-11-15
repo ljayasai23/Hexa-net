@@ -3,6 +3,7 @@ import { requestsAPI, notificationsAPI } from '../../lib/api';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../LoadingSpinner';
 import InstallerRequestList from '../InstallerRequestList';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Stat Card Component with improved design
 const StatCard = ({ title, value, icon, color = 'blue' }) => {
@@ -70,6 +71,7 @@ const StatCard = ({ title, value, icon, color = 'blue' }) => {
 };
 
 export default function InstallerDashboard() {
+  const { user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -138,10 +140,53 @@ export default function InstallerDashboard() {
   }, [fetchRequests, fetchNotifications]);
 
   // Filter out completed requests - only show pending/active ones
+  // Include all assigned projects regardless of status (except Completed)
   const activeRequests = useMemo(() => {
-    if (!Array.isArray(requests)) return [];
-    return requests.filter(r => r && r.status !== 'Completed');
-  }, [requests]);
+    if (!Array.isArray(requests) || !user?._id) return [];
+    // Show all requests that are assigned to this installer and not completed
+    const filtered = requests.filter(r => {
+      if (!r || r.status === 'Completed') return false;
+      // Check if assigned to this installer (handle both populated object and ID)
+      const installerId = r.assignedInstaller?._id || r.assignedInstaller;
+      const isAssigned = installerId && installerId.toString() === user._id.toString();
+      return isAssigned;
+    });
+    // Debug: Log filtered requests
+    console.log('InstallerDashboard: Total requests:', requests.length);
+    console.log('InstallerDashboard: Current user ID:', user._id);
+    console.log('InstallerDashboard: Current user role:', user.role);
+    console.log('InstallerDashboard: Filtered active requests:', filtered.length);
+    if (filtered.length > 0) {
+      console.log('InstallerDashboard: Filtered requests details:', filtered.map(r => ({ 
+        id: r._id, 
+        status: r.status, 
+        campus: r.requirements?.campusName,
+        assignedInstaller: r.assignedInstaller?._id || r.assignedInstaller,
+        assignedInstallerType: typeof r.assignedInstaller,
+        installationProgress: r.installationProgress
+      })));
+    } else if (requests.length > 0) {
+      // Debug: Show why requests were filtered out
+      console.log('InstallerDashboard: All requests (for debugging):', requests.map(r => {
+        const installerId = r.assignedInstaller?._id || r.assignedInstaller;
+        const matchesUser = installerId && installerId.toString() === user._id.toString();
+        return {
+          id: r._id,
+          status: r.status,
+          campus: r.requirements?.campusName,
+          assignedInstaller: installerId,
+          assignedInstallerType: typeof r.assignedInstaller,
+          userInstallerId: user._id,
+          matchesUser: matchesUser,
+          isCompleted: r.status === 'Completed',
+          willBeFiltered: !matchesUser || r.status === 'Completed'
+        };
+      }));
+    } else {
+      console.log('InstallerDashboard: No requests received from API');
+    }
+    return filtered;
+  }, [requests, user]);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -149,10 +194,15 @@ export default function InstallerDashboard() {
       return { total: 0, pending: 0, scheduled: 0, inProgress: 0 };
     }
     
+    // Count all assigned projects that need installer action (not scheduled or in progress)
     const pending = activeRequests.filter(r => 
-      r && (r.status === 'Design Complete' || 
-      r.status === 'Awaiting Client Review' ||
-      (r.status === 'New' && r.requestType === 'Installation Only'))
+      r && !r.scheduledInstallationDate && 
+      r.status !== 'Installation In Progress' &&
+      (r.status === 'Design Complete' || 
+       r.status === 'Awaiting Client Review' ||
+       r.status === 'New' ||
+       r.status === 'Assigned' ||
+       (r.status === 'Design Submitted' && r.requestType !== 'Design Only'))
     ).length;
     
     const scheduled = activeRequests.filter(r => 
@@ -275,13 +325,13 @@ export default function InstallerDashboard() {
         </div>
       </div>
 
-      {/* Active Requests List */}
+      {/* Pending/Incomplete Requests List */}
       <div>
         <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
           <svg className="h-6 w-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
           </svg>
-          Active Installation Requests
+          Pending Installation Requests
           {activeRequests.length === 0 && (
             <span className="ml-2 text-sm font-normal text-gray-500">
               (No pending requests)
@@ -294,6 +344,18 @@ export default function InstallerDashboard() {
               requests={activeRequests} 
               onRequestUpdated={handleRequestUpdated}
             />
+          </div>
+        ) : requests.length > 0 ? (
+          <div className="card p-6">
+            <div className="text-center py-8">
+              <p className="text-gray-500 mb-2">No projects assigned to you yet.</p>
+              <p className="text-sm text-gray-400">
+                Total requests in system: {requests.length}
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                Check console for debugging info (F12)
+              </p>
+            </div>
           </div>
         ) : (
           <div className="card text-center py-12">

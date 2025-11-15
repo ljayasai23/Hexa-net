@@ -121,18 +121,105 @@ const ProjectCard = ({ project }) => {
       </div>
 
       <div className="mb-4">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-medium text-gray-700">Progress</span>
-          {/* RESOLUTION: Keeping the logic from the newer version using the ProgressBar component */}
-          <span className="text-sm text-gray-600">
-            {project.status === 'Completed' ? '100%' : 
-             project.status === 'New' ? '0%' :
-             project.status === 'Assigned' ? '20%' :
-             project.status === 'Design In Progress' ? '40%' :
-             project.status === 'Installation In Progress' ? '80%' : '0%'}
-          </span>
-        </div>
-        <ProgressBar status={project.status} />
+        {/* Dual progress bars for Both Design and Installation */}
+        {project.requestType === 'Both Design and Installation' ? (
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs font-medium text-gray-600">Design Progress</span>
+                <span className="text-xs text-gray-600">
+                  {(() => {
+                    // Check if design exists and is approved (design object might not be populated in list view)
+                    // If design field exists (even as ID), and status indicates design is complete, show 100%
+                    // For list view, we'll rely on status but prioritize design-complete statuses
+                    if (project.status === 'Completed' || project.status === 'Design Complete' || project.status === 'Awaiting Client Review') return '100%';
+                    // If design exists (ID or object) and installer is assigned, design is likely complete
+                    if (project.design && project.assignedInstaller && (project.status === 'Assigned' || project.status === 'Installation In Progress')) return '100%';
+                    // If design object is populated and approved
+                    if (project.design && typeof project.design === 'object' && project.design.isApproved) return '100%';
+                    if (project.status === 'Design Submitted') return '90%';
+                    if (project.status === 'Design In Progress') return '50%';
+                    if (project.status === 'Assigned') return '10%';
+                    return '0%';
+                  })()}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all ${
+                    // If design exists and is approved, or design exists with installer-assigned status, or design-complete statuses, show green (100%)
+                    (project.design && (typeof project.design === 'object' && project.design.isApproved)) ||
+                    (project.design && project.assignedInstaller && (project.status === 'Assigned' || project.status === 'Installation In Progress')) || 
+                    project.status === 'Completed' || project.status === 'Design Complete' || project.status === 'Awaiting Client Review' ? 'bg-green-600' :
+                    project.status === 'Design Submitted' ? 'bg-orange-600' :
+                    project.status === 'Design In Progress' ? 'bg-purple-600' :
+                    project.status === 'Assigned' ? 'bg-blue-600' :
+                    'bg-gray-400'
+                  }`}
+                  style={{ 
+                    width: (() => {
+                      // If design exists and is approved, show 100%
+                      if (project.design && (typeof project.design === 'object' && project.design.isApproved)) return '100%';
+                      // If design exists and installer is assigned, design is likely complete
+                      if (project.design && project.assignedInstaller && (project.status === 'Assigned' || project.status === 'Installation In Progress')) return '100%';
+                      if (project.status === 'Completed' || project.status === 'Design Complete' || project.status === 'Awaiting Client Review') return '100%';
+                      if (project.status === 'Design Submitted') return '90%';
+                      if (project.status === 'Design In Progress') return '50%';
+                      if (project.status === 'Assigned') return '10%';
+                      return '0%';
+                    })()
+                  }}
+                ></div>
+              </div>
+            </div>
+            
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs font-medium text-gray-600">Installation Progress</span>
+                <span className="text-xs text-gray-600">
+                  {project.status === 'Completed' ? '100%' :
+                   project.status === 'Installation In Progress' ? `${project.installationProgress || 0}%` :
+                   project.installationProgress && project.installationProgress > 0 ? `${project.installationProgress}%` :
+                   project.scheduledInstallationDate ? '10%' :
+                   project.assignedInstaller ? '10%' : '0%'}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all ${
+                    project.status === 'Completed' ? 'bg-green-600' :
+                    project.status === 'Installation In Progress' ? 'bg-indigo-600' :
+                    project.installationProgress && project.installationProgress > 0 ? 'bg-yellow-600' :
+                    project.scheduledInstallationDate ? 'bg-yellow-600' :
+                    project.assignedInstaller ? 'bg-yellow-600' :
+                    'bg-gray-400'
+                  }`}
+                  style={{ 
+                    width: project.status === 'Completed' ? '100%' :
+                           project.status === 'Installation In Progress' ? `${project.installationProgress || 0}%` :
+                           project.installationProgress && project.installationProgress > 0 ? `${project.installationProgress}%` :
+                           project.scheduledInstallationDate ? '10%' :
+                           project.assignedInstaller ? '10%' : '0%'
+                  }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium text-gray-700">Progress</span>
+              <span className="text-sm text-gray-600">
+                {project.status === 'Completed' ? '100%' : 
+                 project.status === 'New' ? '0%' :
+                 project.status === 'Assigned' ? '20%' :
+                 project.status === 'Design In Progress' ? '40%' :
+                 project.status === 'Installation In Progress' ? `${project.installationProgress || 80}%` : '0%'}
+              </span>
+            </div>
+            <ProgressBar status={project.status} />
+          </div>
+        )}
       </div>
 
       {isExpanded && (

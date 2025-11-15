@@ -79,7 +79,17 @@ const generatePdfReport = async (designData, request, designer) => {
           doc.moveDown();
           doc.fontSize(14).text('1. Bill of Materials (BOM):', { underline: true });
           designData.billOfMaterials.forEach(item => {
-            const deviceName = item.device?.name || 'Unknown Device';
+            // Handle both populated device object and device ID
+            let deviceName = 'Unknown Device';
+            if (item.device) {
+              if (typeof item.device === 'object') {
+                // Device is populated - use modelName (Device model uses modelName, not name)
+                deviceName = item.device.modelName || item.device.type || 'Unknown Device';
+              } else if (typeof item.device === 'string') {
+                // Device is just an ID, use modelName or category if available
+                deviceName = item.deviceModelName || item.deviceCategory || 'Unknown Device';
+              }
+            }
             doc.text(`- ${deviceName} | Qty: ${item.quantity} @ $${item.unitPrice.toFixed(2)}`);
           });
 

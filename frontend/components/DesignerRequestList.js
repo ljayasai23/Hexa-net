@@ -26,8 +26,24 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
       const response = await designsAPI.generate(requestId);
       const generatedDesign = response.data.design;
       
+      // Check if design was actually generated
+      if (!generatedDesign || !generatedDesign._id) {
+        throw new Error('Design generation failed: No design object returned');
+      }
+      
+      // Check if PDF URL exists
+      if (!generatedDesign.reportPdfUrl) {
+        console.warn('Design generated but PDF URL is missing. Fetching design again...');
+        // Try to fetch the design again to get the PDF URL
+        const designResponse = await designsAPI.getByRequest(requestId);
+        if (designResponse.data.design && designResponse.data.design.reportPdfUrl) {
+          generatedDesign.reportPdfUrl = designResponse.data.design.reportPdfUrl;
+        } else {
+          throw new Error('PDF report was not generated. Please try again or contact support.');
+        }
+      }
+      
       // Immediately update the local requests state to reflect the design
-      // This ensures the button changes immediately without waiting for the API call
       setLocalRequests(prevRequests => 
         prevRequests.map(req => 
           req._id === requestId 
@@ -36,23 +52,34 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
         )
       );
       
+      // Fetch the updated request to get current status
+      const requestResponse = await requestsAPI.getById(requestId);
+      const updatedRequest = requestResponse.data.request;
+      
+      // Ensure request is populated in design object with current status
+      if (!generatedDesign.request) {
+        generatedDesign.request = updatedRequest;
+      } else {
+        // Update the request status in the design object
+        generatedDesign.request.status = updatedRequest.status;
+      }
+      
       // Set the design state to show in modal
       setDesign(generatedDesign);
       setShowDesignModal(true);
       
-      // Refresh the requests list in the background to ensure consistency
-      // Don't await this - let it happen in the background
+      // Refresh the requests list in the background
       if (typeof onRequestUpdated === 'function') {
         onRequestUpdated().catch(err => {
           console.error('Error refreshing requests:', err);
         });
       }
       
-      toast.success('Design generated and PDF created!');
+      toast.success('Design generated successfully! You can now submit it for admin review.');
     } catch (error) {
-      // Show the explicit error if the PDF URL wasn't returned
-      toast.error('Failed to generate design: ' + (error.response?.data?.message || error.message || 'Check server logs.'));
-    } finally {
+      console.error('Generate design error:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to generate design. Please try again.';
+      toast.error(errorMessage);
       setLoading(false);
     }
   };
@@ -113,6 +140,11 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
       // 2. Fetch the Design linked to the request
       const designResponse = await designsAPI.getByRequest(requestId);
       const designData = designResponse.data.design;
+      
+      // Ensure request is populated in design object
+      if (!designData.request) {
+        designData.request = requestData;
+      }
       
       console.log('Fetched design data:', {
         id: designData._id,

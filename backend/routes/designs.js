@@ -110,10 +110,15 @@ router.post('/generate/:requestId', [
     // Populate the design data for response
     await logicDesign.populate('billOfMaterials.device');
 
-  const finalDesign = logicDesign.toObject({ getters: true }); 
+    // Ensure isApproved is explicitly set to false for new designs
+    const finalDesign = logicDesign.toObject ? logicDesign.toObject() : logicDesign;
+    if (finalDesign.isApproved === undefined || finalDesign.isApproved === null) {
+      finalDesign.isApproved = false;
+    }
+    
     res.status(201).json({
       message: 'Design generated successfully',
-      design: logicDesign
+      design: finalDesign
     });
   } catch (error) {
     console.error('Generate design error:', error);
@@ -147,7 +152,13 @@ router.get('/:id', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    res.json({ design });
+    // Ensure isApproved is explicitly set (default to false if undefined/null)
+    const designObj = design.toObject ? design.toObject() : design;
+    if (designObj.isApproved === undefined || designObj.isApproved === null) {
+      designObj.isApproved = false;
+    }
+
+    res.json({ design: designObj });
   } catch (error) {
     console.error('Get design error:', error);
     res.status(500).json({ message: 'Server error fetching design' });
@@ -531,9 +542,20 @@ router.get('/request/:requestId', auth, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    // Ensure we return the design with all fields including reportPdfUrl
+    // Ensure we return the design with all fields including reportPdfUrl and isApproved
     const designObj = design.toObject ? design.toObject() : design;
-    console.log('Returning design with reportPdfUrl:', designObj.reportPdfUrl);
+    
+    // CRITICAL: Ensure isApproved is explicitly set (default to false if undefined/null)
+    if (designObj.isApproved === undefined || designObj.isApproved === null) {
+      designObj.isApproved = false;
+    }
+    
+    console.log('Returning design:', {
+      id: designObj._id,
+      hasReportPdfUrl: !!designObj.reportPdfUrl,
+      isApproved: designObj.isApproved,
+      reportPdfUrl: designObj.reportPdfUrl
+    });
     
     res.json({ design: designObj });
   } catch (error) {

@@ -6,6 +6,7 @@ import AdminStats from '../AdminStats';
 import AdminRequestList from '../AdminRequestList';
 import DeviceCatalog from '../DeviceCatalog';
 
+
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState(null);
@@ -120,7 +121,7 @@ export default function AdminDashboard() {
       {/* Tab Content */}
       <div className="mt-6">
         {activeTab === 'overview' && <AdminStats stats={stats} />}
-        {activeTab === 'requests' && <AdminRequestList />}
+        {activeTab === 'requests' && <AdminRequestList key={lastUpdated?.getTime()} />}
         {activeTab === 'devices' && <DeviceCatalog />}
       </div>
     </div>

@@ -77,23 +77,33 @@ export default function InstallerRequestList({ requests, onRequestUpdated }) {
 
   // Filter requests by status for better organization
   // Only show active requests (exclude completed)
-  const activeRequests = requests.filter(r => r.status !== 'Completed');
+  const activeRequests = requests.filter(r => r && r.status !== 'Completed');
   
-  const pendingRequests = activeRequests.filter(r => 
-    r.status === 'Design Complete' || 
-    r.status === 'Awaiting Client Review' ||
-    (r.status === 'New' && r.requestType === 'Installation Only') ||
-    (r.status === 'Assigned' && r.requestType === 'Installation Only')
+  // Show all assigned projects that need installer action
+  // pendingRequests: Projects assigned but not yet scheduled and not in progress
+  // scheduledRequests: Projects with scheduled date but not yet started
+  // inProgressRequests: Projects currently being installed
+  
+  // First, get in-progress requests
+  const inProgressRequests = activeRequests.filter(r => 
+    r && r.status === 'Installation In Progress'
   );
   
+  // Then, get scheduled requests (but not in progress)
   const scheduledRequests = activeRequests.filter(r => 
+    r &&
     r.scheduledInstallationDate && 
     r.status !== 'Installation In Progress' &&
     r.status !== 'Completed'
   );
   
-  const inProgressRequests = activeRequests.filter(r => 
-    r.status === 'Installation In Progress'
+  // Pending: All incomplete projects that aren't scheduled or in progress
+  // This should catch ALL other incomplete projects
+  const pendingRequests = activeRequests.filter(r => 
+    r &&
+    r.status !== 'Installation In Progress' &&
+    r.status !== 'Completed' &&
+    !r.scheduledInstallationDate
   );
   
   const completedRequests = requests.filter(r => r.status === 'Completed');
@@ -227,10 +237,44 @@ export default function InstallerRequestList({ requests, onRequestUpdated }) {
     </div>
   );
 
+  // Debug logging
+  console.log('InstallerRequestList: Received requests:', requests.length);
+  console.log('InstallerRequestList: Active requests:', activeRequests.length);
+  console.log('InstallerRequestList: Pending requests:', pendingRequests.length);
+  console.log('InstallerRequestList: Scheduled requests:', scheduledRequests.length);
+  console.log('InstallerRequestList: In progress requests:', inProgressRequests.length);
+  
   if (requests.length === 0) {
     return (
       <div className="text-center py-8">
         <p className="text-gray-500">No assigned projects found.</p>
+      </div>
+    );
+  }
+  
+  // If we have requests but no pending/scheduled/inProgress, show a message
+  if (pendingRequests.length === 0 && scheduledRequests.length === 0 && inProgressRequests.length === 0 && activeRequests.length > 0) {
+    console.log('InstallerRequestList: Requests exist but none match filters. Active requests:', activeRequests.map(r => ({
+      id: r._id,
+      status: r.status,
+      scheduledDate: r.scheduledInstallationDate,
+      installationProgress: r.installationProgress,
+      assignedInstaller: r.assignedInstaller?._id || r.assignedInstaller
+    })));
+    // Show all active requests in pending section if they don't match other filters
+    // This ensures projects are always visible
+    const allActiveAsPending = activeRequests;
+    return (
+      <div className="space-y-6">
+        <h2 className="text-xl font-semibold text-gray-900">Assigned Projects</h2>
+        <div>
+          <h3 className="text-md font-semibold text-gray-700 mb-3">
+            📋 Pending Installations ({allActiveAsPending.length})
+          </h3>
+          <div className="grid gap-4">
+            {allActiveAsPending.map(renderRequestCard)}
+          </div>
+        </div>
       </div>
     );
   }
@@ -407,7 +451,7 @@ const DesignModal = ({ design, onClose }) => {
                   </div>
                 </div>
 
-                {design.reportPdfUrl && (
+                {design.reportPdfUrl && design.isApproved && (
                   <div>
                     <h4 className="text-lg font-medium text-gray-900 mb-3">Design Report PDF</h4>
                     <a
@@ -421,6 +465,13 @@ const DesignModal = ({ design, onClose }) => {
                       </svg>
                       Download Design Report PDF
                     </a>
+                  </div>
+                )}
+                {design.reportPdfUrl && !design.isApproved && (
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                    <p className="text-sm text-yellow-700">
+                      <strong>Note:</strong> The design report is pending admin approval. You will be able to view the PDF once the admin approves it.
+                    </p>
                   </div>
                 )}
               </>
