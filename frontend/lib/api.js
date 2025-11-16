@@ -85,9 +85,21 @@ api.interceptors.request.use(
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
           backendURL = 'http://localhost:5000';
         } else {
-          // Local network access (e.g., accessing from Windows at 192.168.43.4 
-          // to Kali at 192.168.43.26:3000, so hostname is 192.168.43.26)
-          backendURL = `http://${hostname}:5000`;
+          // Check if hostname is a local network IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+          const isLocalNetworkIP = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(hostname);
+          
+          if (isLocalNetworkIP) {
+            // When accessing from another device on the same network (e.g., Windows at 192.168.43.4),
+            // the hostname will be the client's IP, not the server's IP.
+            // We need to use the server's IP (192.168.43.26) instead.
+            // Try to detect the server IP from the URL or use a known server IP
+            const serverIP = '192.168.43.26'; // Your Kali machine IP
+            backendURL = `http://${serverIP}:5000`;
+            console.log('🟡 Detected local network access from', hostname, '- using server IP:', serverIP);
+          } else {
+            // For other cases, use the hostname as-is
+            backendURL = `http://${hostname}:5000`;
+          }
         }
         
         finalBaseURL = `${backendURL}/api`;

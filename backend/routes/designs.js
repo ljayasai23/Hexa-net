@@ -140,10 +140,37 @@ router.post('/generate/:requestId', [
   } catch (error) {
     console.error('Generate design error:', error);
     console.error('Error stack:', error.stack);
-    // Return more detailed error message for debugging
-    res.status(500).json({ 
-      message: 'Server error generating design',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    
+    // Provide more specific error messages based on error type
+    let errorMessage = 'Server error generating design';
+    let statusCode = 500;
+    
+    // Check for specific error types
+    if (error.message && error.message.includes('Device catalog is empty')) {
+      errorMessage = 'Device catalog is empty. Please add devices to the catalog before generating designs.';
+      statusCode = 400;
+    } else if (error.message && error.message.includes('Missing required device types')) {
+      errorMessage = error.message;
+      statusCode = 400;
+    } else if (error.message && error.message.includes('invalid data')) {
+      errorMessage = error.message;
+      statusCode = 400;
+    } else if (error.message && error.message.includes('Failed to generate design')) {
+      // Extract the underlying error message if available
+      const underlyingError = error.message.replace('Failed to generate design: ', '');
+      errorMessage = underlyingError || 'Failed to generate design. Please check server logs for details.';
+    }
+    
+    // In production, return a user-friendly message but log the full error
+    res.status(statusCode).json({ 
+      message: errorMessage,
+      // Include error details in development for debugging
+      ...(process.env.NODE_ENV === 'development' && {
+        error: error.message,
+        stack: error.stack
+      })
     });
   }
 });
