@@ -6,7 +6,10 @@ const nextConfig = {
     domains: ['localhost'],
   },
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
+    // In production (Vercel), this should be set to https://hexa-net.onrender.com/api
+    // In local development, it will default to http://localhost:5000/api
+    // But we allow it to be empty so dynamic detection can work for WiFi access
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   },
 
 async headers() {
