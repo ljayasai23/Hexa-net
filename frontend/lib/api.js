@@ -1,101 +1,32 @@
 import axios from 'axios';
 
-// Dynamically determine API URL based on current hostname
-// This function runs at runtime in the browser, not at build time
-const getApiUrl = () => {
-  // If running in browser, detect the hostname and use server IP for API
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const port = '5000';
-    
-    // If accessing via IP address (not localhost), use server IP (192.168.43.206)
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      // Use the server IP instead of client IP
-      const serverIP = '192.168.43.206';
-      const apiUrl = `http://${serverIP}:${port}/api`;
-      console.log('🌐 Using API URL:', apiUrl);
-      // Store base URL for PDF access
-      localStorage.setItem('apiBaseUrl', `http://${serverIP}:${port}`);
-      return apiUrl;
-    }
-  }
-  
-  // Check if we have an explicit API URL in environment (for build time)
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    // Store base URL for PDF access
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('apiBaseUrl', apiUrl.replace('/api', ''));
-    }
-    return apiUrl;
-  }
-  
-  // Default fallback
-  const defaultUrl = 'http://localhost:5000/api';
-  console.log('🌐 Using default API URL:', defaultUrl);
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('apiBaseUrl', 'http://localhost:5000');
-  }
-  return defaultUrl;
-};
+// --- CONFIGURATION ---
+// Base URL for the API. 
+// In production (Vercel), this is set to https://hexa-net.onrender.com
+// via the NEXT_PUBLIC_API_URL environment variable.
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-// Create axios instance with dynamic baseURL
-// Note: The interceptor will override this on each request, but we set a good default
-const getInitialBaseURL = () => {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    // PRIORITY: If accessing from non-localhost IP, ALWAYS use server IP (override env var)
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      // Use server IP for non-localhost access (overrides env var)
-      return 'http://192.168.43.206:5000/api';
-    }
-    // Only use env var if accessing from localhost
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      return process.env.NEXT_PUBLIC_API_URL;
-    }
-  }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-};
+// --- REMOVED: getApiUrl function and dynamic hostname/port logic. ---
+// This prevents the incorrect construction of: http://hexa-net.vercel.app:5000
 
+// Create axios instance with the resolved baseURL
 const api = axios.create({
-  baseURL: getInitialBaseURL(),
+  // Append '/api' to the BASE_URL from the environment variable 
+  // (e.g., https://hexa-net.onrender.com/api)
+  baseURL: `${BASE_URL}/api`, 
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor: dynamically set API URL and add auth token
+console.log('🌐 Axios Base URL set to:', api.defaults.baseURL);
+
+// Request interceptor: Add auth token
 api.interceptors.request.use(
   (config) => {
-    // ALWAYS recalculate API URL on each request to handle dynamic hostname changes
-    // This ensures it works when accessing from different machines
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      const port = '5000';
-      
-      // PRIORITY: If accessing from non-localhost IP, ALWAYS use server IP (override env var)
-      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-        // If accessing from IP, ALWAYS use server IP (192.168.43.206)
-        // This overrides any environment variable that might be set to localhost
-        const serverIP = '192.168.43.206';
-        config.baseURL = `http://${serverIP}:${port}/api`;
-        localStorage.setItem('apiBaseUrl', `http://${serverIP}:${port}`);
-        console.log('🌐 API Request to:', config.baseURL + (config.url || ''));
-      } else if (process.env.NEXT_PUBLIC_API_URL) {
-        // Only use env var if accessing from localhost
-        config.baseURL = process.env.NEXT_PUBLIC_API_URL;
-        // Store base URL (without /api) for PDF access
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL.replace('/api', '');
-        localStorage.setItem('apiBaseUrl', baseUrl);
-        console.log('🌐 Using env API URL:', config.baseURL);
-      } else {
-        config.baseURL = 'http://localhost:5000/api';
-        localStorage.setItem('apiBaseUrl', 'http://localhost:5000');
-        console.log('🌐 Using localhost API URL:', config.baseURL);
-      }
-    }
-    
-    // Add auth token if available
+    // Note: Since we are using a static BASE_URL, we don't need to recalculate 
+    // it here, only add the token.
+
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -114,11 +45,16 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/';// Redirect to home page
+      // Redirect to home page
+      if (typeof window !== 'undefined') {
+        window.location.href = '/'; 
+      }
     }
     return Promise.reject(error);
   }
 );
+
+// --- API ENDPOINTS (No changes needed below here) ---
 
 // Auth API
 export const authAPI = {
@@ -159,7 +95,7 @@ export const adminAPI = {
   getDevice: (id) => api.get(`/admin/devices/${id}`),
   createDevice: (deviceData) => api.post('/admin/devices', deviceData),
   updateDevice: (id, deviceData) => api.put(`/admin/devices/${id}`, deviceData),
-  deleteDevice: (id) => api.delete(`/admin/devices/${id}`),
+  deleteDevice: (id) => api.delete('/admin/devices/${id}'),
   seedDevices: () => api.post('/admin/devices/seed'),
   getUsers: (params = {}) => api.get('/admin/users', { params }),
   getStats: () => api.get('/admin/stats'),
@@ -173,6 +109,5 @@ export const designsAPI = {
   submitForReview: (id) => api.put(`/designs/submit/${id}`), // Designer Submits
   adminApprove: (id, notes) => api.put(`/designs/admin-approve/${id}`, { designNotes: notes }),
 }; // Admin Approves
-  // --------------------------------};
 
 export default api;
