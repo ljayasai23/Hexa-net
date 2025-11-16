@@ -43,8 +43,9 @@ console.log('🌐 Axios Base URL set to:', api.defaults.baseURL);
 // Request interceptor: Add auth token and dynamically set baseURL
 api.interceptors.request.use(
   (config) => {
-    // Dynamically recalculate baseURL for each request (in case hostname changed)
-    if (typeof window !== 'undefined') {
+    // Only dynamically recalculate baseURL if NEXT_PUBLIC_API_URL is NOT set (local development)
+    // In production, use the environment variable which is already set in BASE_URL
+    if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_API_URL) {
       const hostname = window.location.hostname;
       let backendURL;
       
@@ -54,9 +55,11 @@ api.interceptors.request.use(
         backendURL = `http://${hostname}:5000`;
       }
       
-      // Update baseURL if it's different (for client-side requests)
+      // Update baseURL if it's different (for client-side requests in local dev)
       config.baseURL = `${backendURL}/api`;
     }
+    // If NEXT_PUBLIC_API_URL is set (production), use the already configured baseURL
+    // Don't override it in the interceptor
 
     const token = localStorage.getItem('token');
     if (token) {

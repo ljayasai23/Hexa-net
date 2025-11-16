@@ -29,14 +29,15 @@ async headers() {
     ];
   }
   
-  // Production CSP
+  // Production CSP - Allow connections to Render backend
   return [
     {
       source: '/:path*',
       headers: [
         {
           key: 'Content-Security-Policy',
-          value: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:;`,
+          // Allow connections to Render backend (https://hexa-net.onrender.com)
+          value: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://hexa-net.onrender.com https:;`,
         },
       ],
     },
