@@ -86,7 +86,24 @@ const generateTopologyImage = (mermaidCode, tempImageFile) => {
 const generatePdfReport = async (designData, request, designer) => {
   const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'reports');
   if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
+    try {
+      fs.mkdirSync(uploadDir, { recursive: true });
+      console.log('✅ Created uploads/reports directory');
+    } catch (error) {
+      console.error('❌ Failed to create uploads/reports directory:', error);
+      throw new Error(`Failed to create uploads directory: ${error.message}`);
+    }
+  }
+
+  // Ensure temp directory exists
+  if (!fs.existsSync(TEMP_DIR)) {
+    try {
+      fs.mkdirSync(TEMP_DIR, { recursive: true });
+      console.log('✅ Created temp directory');
+    } catch (error) {
+      console.error('❌ Failed to create temp directory:', error);
+      throw new Error(`Failed to create temp directory: ${error.message}`);
+    }
   }
 
   const fileName = `DesignReport-${request.requirements.campusName.replace(/\s/g, '-')}-${request._id}.pdf`;

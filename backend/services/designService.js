@@ -6,23 +6,65 @@ const generateDesign = async (request) => {
   try {
     const { requirements } = request;
     
+    if (!requirements || !requirements.departments || !Array.isArray(requirements.departments)) {
+      throw new Error('Invalid request requirements: departments array is missing or invalid');
+    }
+    
     // Step 1: Aggregate hosts by department
-    const departmentHosts = aggregateHostsByDepartment(requirements.departments);
+    let departmentHosts;
+    try {
+      departmentHosts = aggregateHostsByDepartment(requirements.departments);
+      console.log('✅ Step 1 completed: Hosts aggregated by department');
+    } catch (error) {
+      console.error('❌ Step 1 failed: Aggregate hosts by department');
+      throw new Error(`Failed to aggregate hosts by department: ${error.message}`);
+    }
     
     // Step 2: Calculate required hardware
-    const billOfMaterials = await calculateHardwareRequirements(departmentHosts);
+    let billOfMaterials;
+    try {
+      billOfMaterials = await calculateHardwareRequirements(departmentHosts);
+      console.log('✅ Step 2 completed: Hardware requirements calculated');
+    } catch (error) {
+      console.error('❌ Step 2 failed: Calculate hardware requirements');
+      throw new Error(`Failed to calculate hardware requirements: ${error.message}`);
+    }
     
     // Step 3: Generate IP plan with VLANs and subnets
-    const ipPlan = generateIPPlan(departmentHosts);
+    let ipPlan;
+    try {
+      ipPlan = generateIPPlan(departmentHosts);
+      console.log('✅ Step 3 completed: IP plan generated');
+    } catch (error) {
+      console.error('❌ Step 3 failed: Generate IP plan');
+      throw new Error(`Failed to generate IP plan: ${error.message}`);
+    }
     
     // Step 4: Generate topology diagram
-    const topologyDiagram = generateTopologyDiagram(departmentHosts, billOfMaterials, ipPlan);    
-    if (!topologyDiagram || topologyDiagram.length < 50) {
-      console.error("CRITICAL: Topology diagram string is missing or too short!");
-  }
-    // Step 5: Calculate total cost
-    const totalEstimatedCost = billOfMaterials.reduce((total, item) => total + item.totalCost, 0);
+    let topologyDiagram;
+    try {
+      topologyDiagram = generateTopologyDiagram(departmentHosts, billOfMaterials, ipPlan);
+      if (!topologyDiagram || topologyDiagram.length < 50) {
+        console.error("CRITICAL: Topology diagram string is missing or too short!");
+        throw new Error('Topology diagram generation failed: output is too short or empty');
+      }
+      console.log('✅ Step 4 completed: Topology diagram generated');
+    } catch (error) {
+      console.error('❌ Step 4 failed: Generate topology diagram');
+      throw new Error(`Failed to generate topology diagram: ${error.message}`);
+    }
     
+    // Step 5: Calculate total cost
+    let totalEstimatedCost;
+    try {
+      totalEstimatedCost = billOfMaterials.reduce((total, item) => total + item.totalCost, 0);
+      console.log('✅ Step 5 completed: Total cost calculated');
+    } catch (error) {
+      console.error('❌ Step 5 failed: Calculate total cost');
+      throw new Error(`Failed to calculate total cost: ${error.message}`);
+    }
+    
+    console.log('✅ Design generation completed successfully');
     return {
       billOfMaterials,
       ipPlan,
@@ -31,7 +73,10 @@ const generateDesign = async (request) => {
     };
   } catch (error) {
     console.error('Design generation error (Final Check):', error);
-    throw new Error('Failed to generate design');
+    console.error('Error stack:', error.stack);
+    // Preserve the original error message for better debugging
+    const errorMessage = error.message || 'Unknown error occurred';
+    throw new Error(`Failed to generate design: ${errorMessage}`);
   }
 };
 
