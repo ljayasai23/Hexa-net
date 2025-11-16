@@ -12,6 +12,7 @@ const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 const Request = require('../models/Request');
 const User = require('../models/User');
+const LogicDesign = require('../models/LogicDesign');
 
 
 const Notification = require('../models/Notification');
@@ -906,14 +907,103 @@ router.put('/:id/installation-progress', [
       request.installationNotes = installationNotes;
     }
 
-    // If starting installation, set start date
-    if (request.status !== 'Installation In Progress' && installationProgress > 0) {
+    // If starting installation, set start date and notify
+    const wasJustStarted = request.status !== 'Installation In Progress' && installationProgress > 0;
+    if (wasJustStarted) {
       request.status = 'Installation In Progress';
       request.installationStartDate = new Date();
     }
 
     await request.save();
     await request.populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email');
+
+    // Send notifications
+    try {
+      // Notify client when installation starts
+      if (wasJustStarted && request.client) {
+        try {
+          await createNotification({
+            user: request.client._id,
+            request: request._id,
+            type: 'installation_started',
+            title: '🚀 Installation Started',
+            message: `Installation work has begun for "${request.requirements?.campusName || 'your project'}". Progress: ${installationProgress}%`
+          });
+          console.log(`✅ Installation started notification sent to client: ${request.client._id}`);
+        } catch (clientNotifError) {
+          console.error(`❌ Failed to notify client:`, clientNotifError);
+        }
+      }
+      
+      // Notify admins when installation starts
+      if (wasJustStarted) {
+        try {
+          const webAdmins = await User.find({ role: 'Web Admin' });
+          if (webAdmins && webAdmins.length > 0) {
+            await Promise.all(webAdmins.map(async (admin) => {
+              try {
+                await createNotification({
+                  user: admin._id,
+                  request: request._id,
+                  type: 'installation_started',
+                  title: '🚀 Installation Started',
+                  message: `Installation work has begun for "${request.requirements?.campusName || 'Campus'}". Progress: ${installationProgress}%`
+                });
+                console.log(`✅ Installation started notification sent to admin: ${admin._id}`);
+              } catch (adminNotifError) {
+                console.error(`❌ Failed to notify admin ${admin._id}:`, adminNotifError);
+              }
+            }));
+          } else {
+            console.warn('⚠️ No admins found to notify');
+          }
+        } catch (adminNotifError) {
+          console.error('❌ Failed to create admin start notifications:', adminNotifError);
+        }
+      }
+      
+      // Notify client on progress updates (if not just started)
+      if (!wasJustStarted && request.client && installationProgress > 0) {
+        try {
+          await createNotification({
+            user: request.client._id,
+            request: request._id,
+            type: 'installation_progress',
+            title: '📊 Installation Progress Update',
+            message: `Installation progress updated to ${installationProgress}% for "${request.requirements?.campusName || 'your project'}".`
+          });
+        } catch (clientNotifError) {
+          console.error(`❌ Failed to notify client on progress:`, clientNotifError);
+        }
+      }
+
+      // Notify admins on significant progress updates
+      if (installationProgress >= 50 && installationProgress % 25 === 0) {
+        try {
+          const webAdmins = await User.find({ role: 'Web Admin' });
+          if (webAdmins && webAdmins.length > 0) {
+            await Promise.all(webAdmins.map(async (admin) => {
+              try {
+                await createNotification({
+                  user: admin._id,
+                  request: request._id,
+                  type: 'installation_progress',
+                  title: '📊 Installation Progress Update',
+                  message: `Installation progress: ${installationProgress}% for "${request.requirements?.campusName || 'Campus'}".`
+                });
+              } catch (adminNotifError) {
+                console.error(`❌ Failed to notify admin ${admin._id} on progress:`, adminNotifError);
+              }
+            }));
+          }
+        } catch (adminNotifError) {
+          console.error('❌ Failed to create admin progress notifications:', adminNotifError);
+        }
+      }
+    } catch (notifError) {
+      console.error('Failed to create progress notifications:', notifError);
+      // Don't fail the request if notification fails
+    }
 
     res.json({
       message: 'Installation progress updated successfully',
@@ -959,6 +1049,20 @@ router.put('/:id/complete-installation', [
       return res.status(400).json({ message: 'Installation must be in progress to mark as complete.' });
     }
 
+    // Validate that installation date was proposed
+    if (!request.scheduledInstallationDate) {
+      return res.status(400).json({ 
+        message: 'Cannot complete installation: Installation date must be proposed first. Please propose an installation date before marking as complete.' 
+      });
+    }
+
+    // Validate that installation has actually started (progress > 0)
+    if (!request.installationProgress || request.installationProgress <= 0) {
+      return res.status(400).json({ 
+        message: 'Cannot complete installation: Installation work must be started first. Please start the installation and update progress before marking as complete.' 
+      });
+    }
+
     // Update completion information
     request.status = 'Completed';
     request.actualCompletionDate = new Date();
@@ -966,18 +1070,175 @@ router.put('/:id/complete-installation', [
     request.installationProgress = 100;
     if (completionNotes) {
       request.completionNotes = completionNotes;
+      // Update installation notes to show completion message
+      request.installationNotes = completionNotes + (request.installationNotes ? '\n\n' : '') + '✅ Installation completed successfully.';
+    } else {
+      // Set default completion message if no notes provided
+      request.installationNotes = (request.installationNotes ? request.installationNotes + '\n\n' : '') + '✅ Installation completed successfully.';
     }
 
     await request.save();
     await request.populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email');
 
+    // Send notifications
+    try {
+      // Notify client that installation is completed
+      if (request.client) {
+        await createNotification({
+          user: request.client._id,
+          request: request._id,
+          type: 'installation_completed',
+          title: '✅ Installation Completed',
+          message: `Installation has been completed for "${request.requirements?.campusName || 'your project'}". Please verify and confirm completion.`
+        });
+      }
+
+      // Notify all admins
+      try {
+        const webAdmins = await User.find({ role: 'Web Admin' });
+        if (webAdmins && webAdmins.length > 0) {
+          await Promise.all(webAdmins.map(async (admin) => {
+            try {
+              await createNotification({
+                user: admin._id,
+                request: request._id,
+                type: 'installation_completed',
+                title: '✅ Installation Completed',
+                message: `Installation has been completed for "${request.requirements?.campusName || 'Campus'}". Waiting for client verification.`
+              });
+              console.log(`✅ Installation completed notification sent to admin: ${admin._id}`);
+            } catch (adminNotifError) {
+              console.error(`❌ Failed to notify admin ${admin._id}:`, adminNotifError);
+            }
+          }));
+        } else {
+          console.warn('⚠️ No admins found to notify');
+        }
+      } catch (adminNotifError) {
+        console.error('❌ Failed to create admin completion notifications:', adminNotifError);
+      }
+    } catch (notifError) {
+      console.error('Failed to create completion notifications:', notifError);
+      // Don't fail the request if notification fails
+    }
+
     res.json({
-      message: 'Installation completed successfully',
+      message: 'Installation completed successfully. Client has been notified to verify completion.',
       request
     });
   } catch (error) {
     console.error('Complete installation error:', error);
     res.status(500).json({ message: 'Server error completing installation' });
+  }
+});
+
+// @route   PUT /api/requests/:id/verify-installation
+// @desc    Client verifies installation completion (Client only)
+// @access  Private (Client only)
+router.put('/:id/verify-installation', [
+  auth,
+  authorize('Client'),
+  body('verificationNotes').optional().isString().withMessage('Verification notes must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: errors.array() 
+      });
+    }
+
+    const { verificationNotes } = req.body;
+    const request = await Request.findById(req.params.id);
+
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    // Check if client owns this request
+    if (request.client?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied. This is not your project.' });
+    }
+
+    // Check if installation is completed
+    if (request.status !== 'Completed') {
+      return res.status(400).json({ 
+        message: `Installation must be completed before verification. Current status: ${request.status}` 
+      });
+    }
+
+    // Check if already verified
+    if (request.clientVerified) {
+      return res.status(400).json({ message: 'Installation has already been verified.' });
+    }
+
+    // Update verification
+    request.clientVerified = true;
+    request.clientVerificationDate = new Date();
+    if (verificationNotes) {
+      request.clientVerificationNotes = verificationNotes;
+    }
+
+    await request.save();
+    await request.populate(['client', 'assignedDesigner', 'assignedInstaller'], 'name email');
+
+    // Send notifications
+    try {
+      // Notify all admins - handle errors individually so one failure doesn't stop others
+      const webAdmins = await User.find({ role: 'Web Admin' });
+      if (webAdmins && webAdmins.length > 0) {
+        await Promise.all(webAdmins.map(async (admin) => {
+          try {
+            await createNotification({
+              user: admin._id,
+              request: request._id,
+              type: 'installation_verified',
+              title: '✅ Installation Verified by Client',
+              message: `Client has verified installation completion for "${request.requirements?.campusName || 'Campus'}". Project is fully complete.`
+            });
+            console.log(`✅ Notification sent to admin: ${admin._id}`);
+          } catch (adminNotifError) {
+            console.error(`❌ Failed to notify admin ${admin._id}:`, adminNotifError);
+            // Continue with other admins even if one fails
+          }
+        }));
+      } else {
+        console.warn('⚠️ No admins found to notify');
+      }
+
+      // Notify installer
+      if (request.assignedInstaller) {
+        try {
+          const installerId = request.assignedInstaller._id || request.assignedInstaller;
+          await createNotification({
+            user: installerId,
+            request: request._id,
+            type: 'installation_verified',
+            title: '✅ Installation Verified',
+            message: `Client has verified installation completion for "${request.requirements?.campusName || 'Campus'}".`
+          });
+          console.log(`✅ Notification sent to installer: ${installerId}`);
+        } catch (installerNotifError) {
+          console.error(`❌ Failed to notify installer:`, installerNotifError);
+          // Don't fail the request if notification fails
+        }
+      } else {
+        console.warn('⚠️ No installer assigned to notify');
+      }
+    } catch (notifError) {
+      console.error('❌ Failed to create verification notifications:', notifError);
+      console.error('Error stack:', notifError.stack);
+      // Don't fail the request if notification fails
+    }
+
+    res.json({
+      message: 'Installation verified successfully. Admin has been notified.',
+      request
+    });
+  } catch (error) {
+    console.error('Verify installation error:', error);
+    res.status(500).json({ message: 'Server error verifying installation' });
   }
 });
 
@@ -1063,44 +1324,116 @@ router.put('/:id/complete-by-client', auth, async (req, res) => {
        return res.status(403).json({ message: 'Access denied. You are not the client for this request.' });
      }
       
-     // Check for the new status 'Awaiting Client Review'
-     if (request.status !== 'Awaiting Client Review') {
-       return res.status(400).json({ message: `Request status must be 'Awaiting Client Review' to be marked complete. Current status: ${request.status}` });
+     // Check if design exists and is approved
+     // Designs are stored in the request.design field (which is a LogicDesign reference)
+     // We need to check if the design exists and is approved
+     let design = null;
+     if (request.design) {
+       // If design is populated, use it directly
+       if (typeof request.design === 'object' && request.design.isApproved !== undefined) {
+         design = request.design;
+       } else {
+         // If design is just an ID, populate it
+         await request.populate('design');
+         design = request.design;
+       }
+     } else {
+       // Try to find design by request ID
+       design = await LogicDesign.findOne({ request: request._id });
+     }
+     
+     if (!design || !design.isApproved) {
+       return res.status(400).json({ message: 'Design must be approved by admin before client can accept it.' });
+     }
+     
+     // Allow client acceptance if design is approved, regardless of exact status
+     // (as long as it's not already completed)
+     const allowedStatuses = ['Awaiting Client Review', 'Design In Progress', 'Design Submitted', 'Assigned'];
+     if (!allowedStatuses.includes(request.status) && request.status !== 'Completed' && request.status !== 'Design Complete') {
+       return res.status(400).json({ message: `Request cannot be accepted in current status: ${request.status}. Design must be approved first.` });
+     }
+     
+     // If already completed or design complete, don't allow duplicate acceptance
+     if (request.status === 'Completed' || request.status === 'Design Complete') {
+       return res.status(400).json({ message: 'This request has already been accepted.' });
      }
   
-     // Update the request status to Final Completed
-     request.status = 'Completed';
-     request.actualCompletionDate = new Date();
-      // Also update progress to 100%
-      request.progress = 100;
+     // Determine the correct status and progress based on request type
+     const requestType = request.requestType || 'Both Design and Installation';
+     
+     if (requestType === 'Design Only') {
+       // For Design Only requests, mark as fully completed
+       request.status = 'Completed';
+       request.progress = 100;
+       request.actualCompletionDate = new Date();
+     } else {
+       // For "Both Design and Installation" or "Installation Only" requests, mark design as complete
+       // This allows admin to assign installer
+       request.status = 'Design Complete';
+       request.progress = requestType === 'Both Design and Installation' ? 50 : 60;
+     }
+     
      await request.save();
-  
-      // NOTE: You may want to add logic here to notify the Admin and/or Installer 
-      // that the client has approved and marked the project as complete.
-      // NOTE: Notify the Designer (and Admin) that the client accepted the design
+     await request.populate(['assignedDesigner', 'assignedInstaller'], 'name email');
+
+      // Notify the Designer that the client accepted the design
       if (request.assignedDesigner) {
-        await createNotification({
-            user: request.assignedDesigner,
-            request: request._id,
-            type: 'client_acceptance',
-            title: '✅ Design Accepted by Client',
-            message: `Your design report for project ${request._id.toString().slice(-4)} has been formally accepted by the client.`
-        });
+        try {
+          const designerId = request.assignedDesigner._id || request.assignedDesigner;
+          await createNotification({
+              user: designerId,
+              request: request._id,
+              type: 'client_acceptance',
+              title: '✅ Design Accepted by Client',
+              message: `Your design report for project ${request._id.toString().slice(-4)} has been formally accepted by the client.`
+          });
+          console.log(`✅ Notification sent to designer: ${designerId}`);
+        } catch (designerNotifError) {
+          console.error(`❌ Failed to notify designer:`, designerNotifError);
+        }
       }
       
-      // Optional: Notify Admin that client finalized the request
-      const webAdmins = await User.find({ role: 'Web Admin' });
-      if (webAdmins.length > 0) {
-          await Promise.all(webAdmins.map(admin => createNotification({
-              user: admin._id,
-              request: request._id,
-              type: 'project_completed',
-              title: 'Project Completed by Client',
-              message: `Project ${request._id.toString().slice(-4)} has been marked as completed by the client.`
-          })));
+      // Notify Admin that client accepted the design
+      // For "Both Design and Installation" requests, inform admin that installer can be assigned
+      try {
+        const webAdmins = await User.find({ role: 'Web Admin' });
+        if (webAdmins && webAdmins.length > 0) {
+          await Promise.all(webAdmins.map(async (admin) => {
+            try {
+              let adminMessage;
+              let adminTitle;
+              
+              if (requestType === 'Design Only') {
+                adminTitle = '✅ Project Completed by Client';
+                adminMessage = `Project ${request._id.toString().slice(-4)} (${request.requirements?.campusName || 'Campus'}) has been marked as completed by the client.`;
+              } else {
+                adminTitle = '✅ Design Accepted - Installer Assignment Ready';
+                adminMessage = `Client has accepted the design for project ${request._id.toString().slice(-4)} (${request.requirements?.campusName || 'Campus'}). You can now assign an installer to begin installation work.`;
+              }
+              
+              await createNotification({
+                  user: admin._id,
+                  request: request._id,
+                  type: requestType === 'Design Only' ? 'project_completed' : 'client_acceptance',
+                  title: adminTitle,
+                  message: adminMessage
+              });
+              console.log(`✅ Notification sent to admin: ${admin._id}`);
+            } catch (adminNotifError) {
+              console.error(`❌ Failed to notify admin ${admin._id}:`, adminNotifError);
+            }
+          }));
+        } else {
+          console.warn('⚠️ No admins found to notify');
+        }
+      } catch (adminNotifError) {
+        console.error('❌ Failed to create admin notifications:', adminNotifError);
       }
+      
       res.json({
-        message: 'Request successfully marked as Completed by Client',
+        message: requestType === 'Design Only' 
+          ? 'Request successfully marked as Completed by Client'
+          : 'Design accepted successfully. Admin will assign installer to begin installation.',
         request
       });
     } catch (error) {

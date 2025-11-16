@@ -198,7 +198,15 @@ export default function InstallerRequestList({ requests, onRequestUpdated }) {
             </button>
           )}
           
-          {(request.status === 'Design Complete' || request.status === 'Awaiting Client Review') && !request.scheduledInstallationDate && (
+          {/* Show "Propose Installation Date" button for:
+              1. "Both Design and Installation" requests that have design completed and are assigned
+              2. Requests with status "Design Complete" or "Awaiting Client Review"
+              3. Any assigned request that doesn't have a scheduled date yet */}
+          {((request.requestType === 'Both Design and Installation' && 
+             request.design && 
+             (request.status === 'Assigned' || request.status === 'Design Complete' || request.status === 'Awaiting Client Review' || request.status === 'Design In Progress')) ||
+            (request.status === 'Design Complete' || request.status === 'Awaiting Client Review' || request.status === 'Assigned')) && 
+           !request.scheduledInstallationDate && (
             <button
               onClick={() => handleScheduleInstallation(request)}
               className="btn-primary bg-green-600 hover:bg-green-700 text-sm px-3 py-1"
@@ -224,12 +232,26 @@ export default function InstallerRequestList({ requests, onRequestUpdated }) {
               >
                 Update Progress
               </button>
-              <button
-                onClick={() => handleCompleteInstallation(request)}
-                className="btn-primary bg-green-600 hover:bg-green-700 text-sm px-3 py-1"
-              >
-                Mark Complete
-              </button>
+              {/* Only show Mark Complete if installation date was proposed and progress > 0 */}
+              {request.scheduledInstallationDate && request.installationProgress > 0 && (
+                <button
+                  onClick={() => handleCompleteInstallation(request)}
+                  className="btn-primary bg-green-600 hover:bg-green-700 text-sm px-3 py-1"
+                >
+                  Mark Complete
+                </button>
+              )}
+              {/* Show warning if prerequisites not met */}
+              {(!request.scheduledInstallationDate || !request.installationProgress || request.installationProgress <= 0) && (
+                <div className="text-xs text-yellow-600 mt-1">
+                  {!request.scheduledInstallationDate && (
+                    <p className="mb-1">⚠️ Propose installation date first</p>
+                  )}
+                  {request.scheduledInstallationDate && (!request.installationProgress || request.installationProgress <= 0) && (
+                    <p className="mb-1">⚠️ Start installation work first</p>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -371,8 +393,31 @@ const DesignModal = ({ design, onClose }) => {
   // Check if this is an uploaded design (Installation Only) or generated design
   const isUploadedDesign = design.isUploadedDesign || (design.uploadedFiles && design.uploadedFiles.length > 0 && !design.billOfMaterials);
 
-  // Get API URL for file access
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  // Get API base URL for file access (without /api suffix)
+  const getApiBaseUrl = () => {
+    if (typeof window !== 'undefined') {
+      // Try to get from localStorage first (set by API interceptor)
+      const storedApiUrl = localStorage.getItem('apiBaseUrl');
+      if (storedApiUrl) {
+        return storedApiUrl;
+      }
+      
+      // Try environment variable
+      if (process.env.NEXT_PUBLIC_API_URL) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+        return apiUrl.replace('/api', '');
+      }
+      
+      // Fallback: use server IP directly
+      return 'http://192.168.43.206:5000';
+    }
+    
+    // Server-side or fallback
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    return apiUrl.replace('/api', '');
+  };
+  
+  const API_BASE_URL = getApiBaseUrl();
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -400,7 +445,7 @@ const DesignModal = ({ design, onClose }) => {
                   <h4 className="text-lg font-medium text-gray-900 mb-3">Uploaded Design Documents</h4>
                   <div className="space-y-3">
                     {design.uploadedFiles.map((file, index) => {
-                      const fileUrl = `${API_URL.replace('/api', '')}${file.filePath}`;
+                      const fileUrl = `${API_BASE_URL}${file.filePath}`;
                       return (
                         <div key={index} className="border border-gray-200 rounded-lg p-4">
                           <div className="flex items-center justify-between">
@@ -455,7 +500,7 @@ const DesignModal = ({ design, onClose }) => {
                   <div>
                     <h4 className="text-lg font-medium text-gray-900 mb-3">Design Report PDF</h4>
                     <a
-                      href={`${API_URL.replace('/api', '')}${design.reportPdfUrl}`}
+                      href={`${API_BASE_URL}${design.reportPdfUrl}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="btn-primary inline-flex items-center"

@@ -55,9 +55,21 @@ router.post('/generate/:requestId', [
 
     await logicDesign.populate('billOfMaterials.device');
     const designer = req.user; // Assuming req.user is populated by 'auth' middleware
-    const pdfUrl = await generatePdfReport(logicDesign, request, designer);
-    // ...
-    logicDesign.reportPdfUrl = pdfUrl; // <--- FIX: Use the 'pdfUrl' variable
+    
+    // Generate PDF report - handle errors gracefully
+    let pdfUrl = null;
+    try {
+      pdfUrl = await generatePdfReport(logicDesign, request, designer);
+      logicDesign.reportPdfUrl = pdfUrl;
+      console.log('✅ PDF report generated successfully:', pdfUrl);
+    } catch (pdfError) {
+      // Log the error but don't fail the entire design generation
+      console.error('⚠️ PDF generation failed (design will be saved without PDF):', pdfError.message);
+      console.error('PDF error stack:', pdfError.stack);
+      // Design will be saved without PDF URL - admin/designer can regenerate later
+      logicDesign.reportPdfUrl = null;
+    }
+    
     await logicDesign.save();
     // Update the request with the design reference, status, and progress
     // This ensures the request reflects that design work has started
@@ -116,13 +128,23 @@ router.post('/generate/:requestId', [
       finalDesign.isApproved = false;
     }
     
+    // Explicitly set isApproved to false if not already set (security measure)
+    if (finalDesign.isApproved !== true) {
+      finalDesign.isApproved = false;
+    }
+    
     res.status(201).json({
       message: 'Design generated successfully',
       design: finalDesign
     });
   } catch (error) {
     console.error('Generate design error:', error);
-    res.status(500).json({ message: 'Server error generating design' });
+    console.error('Error stack:', error.stack);
+    // Return more detailed error message for debugging
+    res.status(500).json({ 
+      message: 'Server error generating design',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

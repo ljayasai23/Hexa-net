@@ -96,6 +96,18 @@ const requestSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Client verification fields
+  clientVerified: {
+    type: Boolean,
+    default: false
+  },
+  clientVerificationDate: {
+    type: Date
+  },
+  clientVerificationNotes: {
+    type: String,
+    trim: true
+  },
   adminResponse: {
     type: String,
     trim: true

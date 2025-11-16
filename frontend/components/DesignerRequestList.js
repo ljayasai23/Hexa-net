@@ -57,11 +57,17 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
       const updatedRequest = requestResponse.data.request;
       
       // Ensure request is populated in design object with current status
-      if (!generatedDesign.request) {
+      // Check if request is a string (ID) or an object
+      if (!generatedDesign.request || typeof generatedDesign.request === 'string') {
+        // If request is missing or just an ID string, replace it with the full request object
         generatedDesign.request = updatedRequest;
-      } else {
-        // Update the request status in the design object
-        generatedDesign.request.status = updatedRequest.status;
+      } else if (typeof generatedDesign.request === 'object') {
+        // If request is already an object, update its properties
+        generatedDesign.request = {
+          ...generatedDesign.request,
+          ...updatedRequest,
+          status: updatedRequest.status
+        };
       }
       
       // Set the design state to show in modal
@@ -70,9 +76,17 @@ export default function DesignerRequestList({ requests, onRequestUpdated }) {
       
       // Refresh the requests list in the background
       if (typeof onRequestUpdated === 'function') {
-        onRequestUpdated().catch(err => {
-          console.error('Error refreshing requests:', err);
-        });
+        try {
+          const result = onRequestUpdated();
+          // If it returns a Promise, handle it; otherwise, ignore
+          if (result && typeof result.catch === 'function') {
+            result.catch(err => {
+              console.error('Error refreshing requests:', err);
+            });
+          }
+        } catch (err) {
+          console.error('Error calling onRequestUpdated:', err);
+        }
       }
       
       toast.success('Design generated successfully! You can now submit it for admin review.');

@@ -1,6 +1,6 @@
 // components/NotificationBell.js (Replace the entire component with this corrected version)
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { notificationsAPI } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import Link from 'next/link';
@@ -11,6 +11,7 @@ export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const notificationRef = useRef(null);
 
   useEffect(() => {
     if (user) {
@@ -23,6 +24,25 @@ export default function NotificationBell() {
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      // Add event listener when dropdown is open
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    // Cleanup event listener
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const fetchNotifications = async () => {
     try {
@@ -71,24 +91,20 @@ export default function NotificationBell() {
     }
     setIsOpen(false);
     
-    // --- CRITICAL FIX: Direct to the correct file name with a query parameter ---
+    // Navigate to project detail page using dynamic route
     if (notification.project?._id) {
-        // Target the static page file name: project-detail.js
-        // Pass the ID as a query parameter (e.g., /project-detail?id=123...)
-        let targetPath = `/project-detail?id=${notification.project._id}`;
-        
-        // Navigate to the project detail page
-        window.location.href = targetPath;
+        // Use the dynamic route /project/[id] instead of query parameter
+        const projectId = notification.project._id;
+        window.location.href = `/project/${projectId}`;
     } else {
         // Fallback
         window.location.href = '/dashboard';
     }
-    // ---------------------------------------------------------------------------
   };
   if (!user) return null;
 
   return (
-    <div className="relative">
+    <div className="relative" ref={notificationRef}>
       {/* Bell Icon */}
       <button
         onClick={() => setIsOpen(!isOpen)}

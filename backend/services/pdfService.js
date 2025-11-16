@@ -25,17 +25,55 @@ const generateTopologyImage = (mermaidCode, tempImageFile) => {
         fs.writeFileSync(tempMermaidFile, mermaidCode);
         
         // --- FINAL FIX: Use the explicit path to the executable ---
-        const command = `${MMDC_PATH} -i "${tempMermaidFile}" -o "${tempImageFile}" -t neutral --width 800`;
+        // Use puppeteer config file to pass --no-sandbox flag for Ubuntu 23.10+ compatibility
+        const puppeteerConfigPath = path.resolve(__dirname, '..', 'puppeteer-config.json');
+        
+        // Build command with puppeteer config file (use long form flag for clarity)
+        const command = `${MMDC_PATH} -i "${tempMermaidFile}" -o "${tempImageFile}" -t neutral --width 800 --puppeteerConfigFile "${puppeteerConfigPath}"`;
         // ----------------------------------------------------------
 
+        // Set environment variables as additional fallback
+        // Note: Mermaid CLI should read the config file, but env vars provide backup
+        const env = {
+            ...process.env,
+            // Some Puppeteer versions read this
+            PUPPETEER_ARGS: '--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage'
+        };
+
+        console.log('Mermaid CLI command:', command);
+        console.log('Puppeteer config file:', puppeteerConfigPath);
+        console.log('Config file exists:', fs.existsSync(puppeteerConfigPath));
+
         // We run the exec command without relying on npx or explicit cwd settings
-        exec(command, (error, stdout, stderr) => {
+        exec(command, { env }, (error, stdout, stderr) => {
+            // Check if the output image file was actually created (success indicator)
+            const imageCreated = fs.existsSync(tempImageFile);
+            
             if (error) {
-                console.error(`Mermaid CLI Error: ${stderr}`);
-                return reject(new Error(`Failed to render topology image: ${error.message}. Stderr: ${stderr}`));
+                // Only treat as error if image wasn't created
+                if (!imageCreated) {
+                    console.error(`Mermaid CLI Error: ${stderr}`);
+                    return reject(new Error(`Failed to render topology image: ${error.message}. Stderr: ${stderr}`));
+                } else {
+                    // Image was created despite error code - might be a warning
+                    console.warn(`Mermaid CLI warning (but image created): ${stderr || error.message}`);
+                }
+            } else if (stderr && stderr.trim()) {
+                // Log stderr as warning if it exists but command succeeded
+                console.warn(`Mermaid CLI stderr output (non-fatal): ${stderr}`);
             }
+            
+            // Verify image was created
+            if (!imageCreated) {
+                return reject(new Error(`Mermaid CLI completed but image file was not created at: ${tempImageFile}`));
+            }
+            
+            console.log(`✅ Topology image generated successfully: ${tempImageFile}`);
+            
             // Clean up the temporary Mermaid source file
-            fs.unlinkSync(tempMermaidFile);
+            if (fs.existsSync(tempMermaidFile)) {
+                fs.unlinkSync(tempMermaidFile);
+            }
             resolve(true);
         });
     });

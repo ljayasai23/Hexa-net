@@ -79,6 +79,7 @@ export const requestsAPI = {
   scheduleInstallation: (id, data) => api.put(`/requests/${id}/schedule-installation`, data),
   updateInstallationProgress: (id, data) => api.put(`/requests/${id}/installation-progress`, data),
   completeInstallation: (id, data) => api.put(`/requests/${id}/complete-installation`, data),
+  verifyInstallation: (id, data) => api.put(`/requests/${id}/verify-installation`, data),
 };
 
 // Notifications API

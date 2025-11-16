@@ -140,52 +140,17 @@ export default function InstallerDashboard() {
   }, [fetchRequests, fetchNotifications]);
 
   // Filter out completed requests - only show pending/active ones
-  // Include all assigned projects regardless of status (except Completed)
+  // NOTE: Backend already filters by assignedInstaller, so all requests returned are assigned to this installer
+  // We only need to filter out completed requests on the frontend
+  // Backend already filters by assignedInstaller, so we trust all returned requests are assigned
   const activeRequests = useMemo(() => {
-    if (!Array.isArray(requests) || !user?._id) return [];
-    // Show all requests that are assigned to this installer and not completed
-    const filtered = requests.filter(r => {
-      if (!r || r.status === 'Completed') return false;
-      // Check if assigned to this installer (handle both populated object and ID)
-      const installerId = r.assignedInstaller?._id || r.assignedInstaller;
-      const isAssigned = installerId && installerId.toString() === user._id.toString();
-      return isAssigned;
-    });
-    // Debug: Log filtered requests
-    console.log('InstallerDashboard: Total requests:', requests.length);
-    console.log('InstallerDashboard: Current user ID:', user._id);
-    console.log('InstallerDashboard: Current user role:', user.role);
-    console.log('InstallerDashboard: Filtered active requests:', filtered.length);
-    if (filtered.length > 0) {
-      console.log('InstallerDashboard: Filtered requests details:', filtered.map(r => ({ 
-        id: r._id, 
-        status: r.status, 
-        campus: r.requirements?.campusName,
-        assignedInstaller: r.assignedInstaller?._id || r.assignedInstaller,
-        assignedInstallerType: typeof r.assignedInstaller,
-        installationProgress: r.installationProgress
-      })));
-    } else if (requests.length > 0) {
-      // Debug: Show why requests were filtered out
-      console.log('InstallerDashboard: All requests (for debugging):', requests.map(r => {
-        const installerId = r.assignedInstaller?._id || r.assignedInstaller;
-        const matchesUser = installerId && installerId.toString() === user._id.toString();
-        return {
-          id: r._id,
-          status: r.status,
-          campus: r.requirements?.campusName,
-          assignedInstaller: installerId,
-          assignedInstallerType: typeof r.assignedInstaller,
-          userInstallerId: user._id,
-          matchesUser: matchesUser,
-          isCompleted: r.status === 'Completed',
-          willBeFiltered: !matchesUser || r.status === 'Completed'
-        };
-      }));
-    } else {
-      console.log('InstallerDashboard: No requests received from API');
+    if (!Array.isArray(requests)) {
+      return [];
     }
-    return filtered;
+    
+    // Backend already filters by assignedInstaller, so we trust all returned requests are assigned
+    // Only filter out completed requests
+    return requests.filter(r => r && r.status !== 'Completed');
   }, [requests, user]);
 
   // Calculate stats
@@ -195,14 +160,12 @@ export default function InstallerDashboard() {
     }
     
     // Count all assigned projects that need installer action (not scheduled or in progress)
+    // Show all incomplete projects that aren't scheduled or in progress
     const pending = activeRequests.filter(r => 
-      r && !r.scheduledInstallationDate && 
+      r && 
+      !r.scheduledInstallationDate && 
       r.status !== 'Installation In Progress' &&
-      (r.status === 'Design Complete' || 
-       r.status === 'Awaiting Client Review' ||
-       r.status === 'New' ||
-       r.status === 'Assigned' ||
-       (r.status === 'Design Submitted' && r.requestType !== 'Design Only'))
+      r.status !== 'Completed'
     ).length;
     
     const scheduled = activeRequests.filter(r => 
@@ -346,16 +309,14 @@ export default function InstallerDashboard() {
             />
           </div>
         ) : requests.length > 0 ? (
-          <div className="card p-6">
-            <div className="text-center py-8">
-              <p className="text-gray-500 mb-2">No projects assigned to you yet.</p>
-              <p className="text-sm text-gray-400">
-                Total requests in system: {requests.length}
-              </p>
-              <p className="text-xs text-gray-400 mt-2">
-                Check console for debugging info (F12)
-              </p>
-            </div>
+          <div className="card text-center py-12">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">All Projects Completed</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              All your assigned projects have been completed.
+            </p>
           </div>
         ) : (
           <div className="card text-center py-12">
