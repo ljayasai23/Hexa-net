@@ -959,6 +959,20 @@ router.put('/:id/complete-installation', [
       return res.status(400).json({ message: 'Installation must be in progress to mark as complete.' });
     }
 
+    // Validate that installation date was proposed
+    if (!request.scheduledInstallationDate) {
+      return res.status(400).json({ 
+        message: 'Cannot complete installation: Installation date must be proposed first. Please propose an installation date before marking as complete.' 
+      });
+    }
+
+    // Validate that installation has actually started (progress > 0)
+    if (!request.installationProgress || request.installationProgress <= 0) {
+      return res.status(400).json({ 
+        message: 'Cannot complete installation: Installation work must be started first. Please start the installation and update progress before marking as complete.' 
+      });
+    }
+
     // Update completion information
     request.status = 'Completed';
     request.actualCompletionDate = new Date();

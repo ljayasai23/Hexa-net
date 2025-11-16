@@ -224,12 +224,26 @@ export default function InstallerRequestList({ requests, onRequestUpdated }) {
               >
                 Update Progress
               </button>
-              <button
-                onClick={() => handleCompleteInstallation(request)}
-                className="btn-primary bg-green-600 hover:bg-green-700 text-sm px-3 py-1"
-              >
-                Mark Complete
-              </button>
+              {/* Only show Mark Complete if installation date was proposed and progress > 0 */}
+              {request.scheduledInstallationDate && request.installationProgress > 0 && (
+                <button
+                  onClick={() => handleCompleteInstallation(request)}
+                  className="btn-primary bg-green-600 hover:bg-green-700 text-sm px-3 py-1"
+                >
+                  Mark Complete
+                </button>
+              )}
+              {/* Show warning if prerequisites not met */}
+              {(!request.scheduledInstallationDate || !request.installationProgress || request.installationProgress <= 0) && (
+                <div className="text-xs text-yellow-600 mt-1">
+                  {!request.scheduledInstallationDate && (
+                    <p className="mb-1">⚠️ Propose installation date first</p>
+                  )}
+                  {request.scheduledInstallationDate && (!request.installationProgress || request.installationProgress <= 0) && (
+                    <p className="mb-1">⚠️ Start installation work first</p>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>

@@ -83,9 +83,22 @@ export default function ProjectDetail() {
   
   const showAcceptView = isClient && request?.status === 'Awaiting Client Review';
   
-  // FIX: Ensure PDF URL is constructed correctly for static file access (stripping /api)
+  // --- PDF URL Construction ---
+  // FIX: Ensure PDF URL is constructed correctly for static file access
+  const getApiBaseUrl = () => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const port = '5000';
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        return `http://${hostname}:${port}`;
+      }
+    }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    return apiUrl.replace('/api', '');
+  };
+  
   const pdfUrl = design?.reportPdfUrl 
-    ? `${process.env.NEXT_PUBLIC_API_URL.replace('/api', '')}${design.reportPdfUrl}` 
+    ? `${getApiBaseUrl()}${design.reportPdfUrl}` 
     : null;
   
   // CRITICAL: Check if design is approved (handle undefined/null as false)
@@ -244,11 +257,24 @@ export default function ProjectDetail() {
                         'bg-gray-400'
                       }`}
                       style={{ 
-                        width: request.status === 'Completed' ? '100%' :
-                               request.status === 'Installation In Progress' ? `${request.installationProgress || 0}%` :
-                               request.installationProgress && request.installationProgress > 0 ? `${request.installationProgress}%` :
-                               request.scheduledInstallationDate ? '10%' :
-                               request.assignedInstaller ? '10%' : '0%'
+                        width: (() => {
+                          // Always show 100% if status is Completed
+                          if (request.status === 'Completed') return '100%';
+                          // Show actual progress if installation is in progress
+                          if (request.status === 'Installation In Progress') {
+                            return `${request.installationProgress || 0}%`;
+                          }
+                          // Show installationProgress if it's set and > 0
+                          if (request.installationProgress && request.installationProgress > 0) {
+                            return `${request.installationProgress}%`;
+                          }
+                          // Show 10% if scheduled
+                          if (request.scheduledInstallationDate) return '10%';
+                          // Show 10% if installer is assigned
+                          if (request.assignedInstaller) return '10%';
+                          // Default to 0%
+                          return '0%';
+                        })()
                       }}
                     ></div>
                   </div>
@@ -278,11 +304,24 @@ export default function ProjectDetail() {
                       'bg-gray-400'
                     }`}
                     style={{ 
-                      width: request.status === 'Completed' ? '100%' :
-                             request.status === 'Installation In Progress' ? `${request.installationProgress || 0}%` :
-                             request.installationProgress && request.installationProgress > 0 ? `${request.installationProgress}%` :
-                             request.scheduledInstallationDate ? '10%' :
-                             request.assignedInstaller ? '10%' : '0%'
+                      width: (() => {
+                        // Always show 100% if status is Completed
+                        if (request.status === 'Completed') return '100%';
+                        // Show actual progress if installation is in progress
+                        if (request.status === 'Installation In Progress') {
+                          return `${request.installationProgress || 0}%`;
+                        }
+                        // Show installationProgress if it's set and > 0
+                        if (request.installationProgress && request.installationProgress > 0) {
+                          return `${request.installationProgress}%`;
+                        }
+                        // Show 10% if scheduled
+                        if (request.scheduledInstallationDate) return '10%';
+                        // Show 10% if installer is assigned
+                        if (request.assignedInstaller) return '10%';
+                        // Default to 0%
+                        return '0%';
+                      })()
                     }}
                   ></div>
                 </div>
@@ -364,36 +403,62 @@ export default function ProjectDetail() {
             </div>
           )}
           
-          {/* Show message if design exists but not approved yet */}
-          {isClient && design && design.reportPdfUrl && !isDesignApproved && (
+          {/* Show message if design exists but not approved/forwarded yet */}
+          {user?.role === 'Client' && design && design.reportPdfUrl && (!isDesignApproved || request?.status !== 'Awaiting Client Review') && (
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-6">
               <h4 className="text-md font-bold text-yellow-800 mb-2">Design Pending Approval</h4>
               <p className="text-sm text-yellow-700">
-                The designer has generated a design for your project, but it is currently pending admin review and approval. 
-                You will be notified once the admin approves the design and you can review it.
+                {request?.status === 'Design In Progress' 
+                  ? 'The designer has generated a design for your project, but it has not been submitted to the admin yet. You will be notified once the designer submits it and the admin approves it.'
+                  : request?.status === 'Design Submitted'
+                  ? 'The designer has submitted the design to the admin for review. You will be notified once the admin approves the design and forwards it to you.'
+                  : 'The design is currently pending admin review and approval. You will be notified once the admin approves the design and you can review it.'}
               </p>
             </div>
           )}
           {/* ------------------------------------------------------------------ */}
           
-          {/* --- DESIGN REPORT SECTION (Shows only after admin approval) --- */}
-          {/* Show PDF if design exists, has PDF URL, is approved, and status indicates design is complete */}
-          {design && pdfUrl && isDesignApproved && (
-            request.status === 'Completed' || 
-            request.status === 'Awaiting Client Review' || 
-            request.status === 'Design Complete' ||
-            request.status === 'Design Submitted' ||
-            request.status === 'Assigned' ||
-            request.status === 'Installation In Progress'
-          ) && (
+          {/* --- DESIGN REPORT SECTION --- */}
+          {/* Show PDF if design exists and has PDF URL */}
+          {/* For clients: ONLY show if approved by admin */}
+          {/* For designers/admins/installers: show if PDF exists (they can review before approval) */}
+          {(() => {
+            // Explicitly check if we should show the PDF
+            if (!design || !pdfUrl) return false;
+            
+            // Check user role directly (more reliable than isClient which depends on client ID matching)
+            const userIsClient = user?.role === 'Client';
+            
+            // If user is a client, ONLY show if:
+            // 1. Design is approved by admin (design.isApproved === true)
+            // 2. Request status is "Awaiting Client Review" (admin has approved and forwarded to client)
+            if (userIsClient) {
+              const isApproved = isDesignApproved === true && design.isApproved === true;
+              const isForwardedToClient = request?.status === 'Awaiting Client Review';
+              return isApproved && isForwardedToClient;
+            }
+            
+            // If user is NOT a client (designer, admin, installer), show if PDF exists
+            // They can review it even before submission/approval
+            if (!userIsClient) {
+              return !!design.reportPdfUrl;
+            }
+            
+            // Default: don't show if we can't determine user role
+            return false;
+          })() && (
             <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-6">
               <h4 className="text-md font-bold text-blue-800 mb-2">
-                {request.status === 'Completed' ? '✅ Project Completed - Design Report' : '📄 Approved Design Report'}
+                {request.status === 'Completed' ? '✅ Project Completed - Design Report' : 
+                 isDesignApproved ? '📄 Approved Design Report' : 
+                 '📄 Design Report'}
               </h4>
               <p className="text-sm text-blue-700 mb-4">
                 {request.status === 'Completed' 
                   ? 'This project has been completed. You can review the final design report below.'
-                  : 'The admin has approved this design. Please review the design report below.'}
+                  : isDesignApproved
+                  ? 'The admin has approved this design. Please review the design report below.'
+                  : 'The design report is available for review.'}
               </p>
               
               <a 
@@ -455,25 +520,11 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {/* Installation Progress - Show when scheduled or in progress */}
-          {(request.scheduledInstallationDate || request.status === 'Installation In Progress' || request.installationProgress > 0) && (
-            <div className="bg-purple-50 border-l-4 border-purple-400 p-4 mt-4">
-              <h4 className="text-md font-bold text-purple-800 mb-2">Installation Progress</h4>
-              <div className="w-full bg-purple-200 rounded-full h-3 mb-2">
-                <div 
-                  className="bg-purple-600 h-3 rounded-full transition-all duration-300"
-                  style={{ width: `${request.installationProgress || 0}%` }}
-                ></div>
-              </div>
-              <p className="text-sm text-purple-700">
-                {request.status === 'Completed' ? '100% Complete' :
-                 request.status === 'Installation In Progress' ? `${request.installationProgress || 0}% Complete` :
-                 request.scheduledInstallationDate ? 'Scheduled - Not Started' :
-                 '0% Complete'}
-              </p>
-              {request.installationNotes && (
-                <p className="text-sm text-purple-600 mt-2 italic">{request.installationNotes}</p>
-              )}
+          {/* Installation Notes - Show when available */}
+          {request.installationNotes && (
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-4">
+              <h4 className="text-md font-bold text-blue-800 mb-2">Installation Notes</h4>
+              <p className="text-sm text-blue-700">{request.installationNotes}</p>
             </div>
           )}
           

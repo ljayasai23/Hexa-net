@@ -16,6 +16,9 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
   const [refreshToggle, setRefreshToggle] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   const fetchData = async () => {
     if (!id) return;
@@ -83,13 +86,48 @@ export default function ProjectDetail() {
   
   const showAcceptView = isClient && request?.status === 'Awaiting Client Review';
   
-  // FIX: Ensure PDF URL is constructed correctly for static file access (stripping /api)
+  // --- Installer Check Logic ---
+  const isInstaller = user?.role === 'Network Installation Team';
+  const installerId = request?.assignedInstaller?._id || request?.assignedInstaller;
+  const isAssignedInstaller = isInstaller && installerId && installerId.toString() === user?._id?.toString();
+  
+  // --- PDF URL Construction ---
+  // FIX: Ensure PDF URL is constructed correctly for static file access
+  const getApiBaseUrl = () => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const port = '5000';
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        return `http://${hostname}:${port}`;
+      }
+    }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    return apiUrl.replace('/api', '');
+  };
+  
   const pdfUrl = design?.reportPdfUrl 
-    ? `${process.env.NEXT_PUBLIC_API_URL.replace('/api', '')}${design.reportPdfUrl}` 
+    ? `${getApiBaseUrl()}${design.reportPdfUrl}` 
     : null;
   
   // CRITICAL: Check if design is approved (handle undefined/null as false)
   const isDesignApproved = design?.isApproved === true;
+  
+  // Debug logging for PDF visibility
+  useEffect(() => {
+    if (design && request && user) {
+      console.log('PDF Visibility Check:', {
+        userRole: user.role,
+        isClient: isClient,
+        hasDesign: !!design,
+        hasPdfUrl: !!pdfUrl,
+        isDesignApproved: isDesignApproved,
+        designIsApproved: design.isApproved,
+        shouldShowForClient: isClient && isDesignApproved && design.isApproved === true,
+        shouldShowForNonClient: !isClient && design.reportPdfUrl,
+        willShow: (isClient && isDesignApproved && design.isApproved === true) || (!isClient && design.reportPdfUrl)
+      });
+    }
+  }, [design, pdfUrl, isDesignApproved, isClient, request, user]);
   
   // Debug logging - must be called before any early returns
   useEffect(() => {
@@ -244,11 +282,24 @@ export default function ProjectDetail() {
                         'bg-gray-400'
                       }`}
                       style={{ 
-                        width: request.status === 'Completed' ? '100%' :
-                               request.status === 'Installation In Progress' ? `${request.installationProgress || 0}%` :
-                               request.installationProgress && request.installationProgress > 0 ? `${request.installationProgress}%` :
-                               request.scheduledInstallationDate ? '10%' :
-                               request.assignedInstaller ? '10%' : '0%'
+                        width: (() => {
+                          // Always show 100% if status is Completed
+                          if (request.status === 'Completed') return '100%';
+                          // Show actual progress if installation is in progress
+                          if (request.status === 'Installation In Progress') {
+                            return `${request.installationProgress || 0}%`;
+                          }
+                          // Show installationProgress if it's set and > 0
+                          if (request.installationProgress && request.installationProgress > 0) {
+                            return `${request.installationProgress}%`;
+                          }
+                          // Show 10% if scheduled
+                          if (request.scheduledInstallationDate) return '10%';
+                          // Show 10% if installer is assigned
+                          if (request.assignedInstaller) return '10%';
+                          // Default to 0%
+                          return '0%';
+                        })()
                       }}
                     ></div>
                   </div>
@@ -278,11 +329,24 @@ export default function ProjectDetail() {
                       'bg-gray-400'
                     }`}
                     style={{ 
-                      width: request.status === 'Completed' ? '100%' :
-                             request.status === 'Installation In Progress' ? `${request.installationProgress || 0}%` :
-                             request.installationProgress && request.installationProgress > 0 ? `${request.installationProgress}%` :
-                             request.scheduledInstallationDate ? '10%' :
-                             request.assignedInstaller ? '10%' : '0%'
+                      width: (() => {
+                        // Always show 100% if status is Completed
+                        if (request.status === 'Completed') return '100%';
+                        // Show actual progress if installation is in progress
+                        if (request.status === 'Installation In Progress') {
+                          return `${request.installationProgress || 0}%`;
+                        }
+                        // Show installationProgress if it's set and > 0
+                        if (request.installationProgress && request.installationProgress > 0) {
+                          return `${request.installationProgress}%`;
+                        }
+                        // Show 10% if scheduled
+                        if (request.scheduledInstallationDate) return '10%';
+                        // Show 10% if installer is assigned
+                        if (request.assignedInstaller) return '10%';
+                        // Default to 0%
+                        return '0%';
+                      })()
                     }}
                   ></div>
                 </div>
@@ -365,36 +429,62 @@ export default function ProjectDetail() {
             </div>
           )}
           
-          {/* Show message if design exists but not approved yet */}
-          {isClient && design && design.reportPdfUrl && !isDesignApproved && (
+          {/* Show message if design exists but not approved/forwarded yet */}
+          {user?.role === 'Client' && design && design.reportPdfUrl && (!isDesignApproved || request?.status !== 'Awaiting Client Review') && (
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-6">
               <h4 className="text-md font-bold text-yellow-800 mb-2">Design Pending Approval</h4>
               <p className="text-sm text-yellow-700">
-                The designer has generated a design for your project, but it is currently pending admin review and approval. 
-                You will be notified once the admin approves the design and you can review it.
+                {request?.status === 'Design In Progress' 
+                  ? 'The designer has generated a design for your project, but it has not been submitted to the admin yet. You will be notified once the designer submits it and the admin approves it.'
+                  : request?.status === 'Design Submitted'
+                  ? 'The designer has submitted the design to the admin for review. You will be notified once the admin approves the design and forwards it to you.'
+                  : 'The design is currently pending admin review and approval. You will be notified once the admin approves the design and you can review it.'}
               </p>
             </div>
           )}
           {/* ------------------------------------------------------------------ */}
           
-          {/* --- DESIGN REPORT SECTION (Shows only after admin approval) --- */}
-          {/* Show PDF if design exists, has PDF URL, is approved, and status indicates design is complete */}
-          {design && pdfUrl && isDesignApproved && (
-            request.status === 'Completed' || 
-            request.status === 'Awaiting Client Review' || 
-            request.status === 'Design Complete' ||
-            request.status === 'Design Submitted' ||
-            request.status === 'Assigned' ||
-            request.status === 'Installation In Progress'
-          ) && (
+          {/* --- DESIGN REPORT SECTION --- */}
+          {/* Show PDF if design exists and has PDF URL */}
+          {/* For clients: ONLY show if approved by admin */}
+          {/* For designers/admins/installers: show if PDF exists (they can review before approval) */}
+          {(() => {
+            // Explicitly check if we should show the PDF
+            if (!design || !pdfUrl) return false;
+            
+            // Check user role directly (more reliable than isClient which depends on client ID matching)
+            const userIsClient = user?.role === 'Client';
+            
+            // If user is a client, ONLY show if:
+            // 1. Design is approved by admin (design.isApproved === true)
+            // 2. Request status is "Awaiting Client Review" (admin has approved and forwarded to client)
+            if (userIsClient) {
+              const isApproved = isDesignApproved === true && design.isApproved === true;
+              const isForwardedToClient = request?.status === 'Awaiting Client Review';
+              return isApproved && isForwardedToClient;
+            }
+            
+            // If user is NOT a client (designer, admin, installer), show if PDF exists
+            // They can review it even before submission/approval
+            if (!userIsClient) {
+              return !!design.reportPdfUrl;
+            }
+            
+            // Default: don't show if we can't determine user role
+            return false;
+          })() && (
             <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-6">
               <h4 className="text-md font-bold text-blue-800 mb-2">
-                {request.status === 'Completed' ? '✅ Project Completed - Design Report' : '📄 Approved Design Report'}
+                {request.status === 'Completed' ? '✅ Project Completed - Design Report' : 
+                 isDesignApproved ? '📄 Approved Design Report' : 
+                 '📄 Design Report'}
               </h4>
               <p className="text-sm text-blue-700 mb-4">
                 {request.status === 'Completed' 
                   ? 'This project has been completed. You can review the final design report below.'
-                  : 'The admin has approved this design. Please review the design report below.'}
+                  : isDesignApproved
+                  ? 'The admin has approved this design. Please review the design report below.'
+                  : 'The design report is available for review.'}
               </p>
               
               <a 
@@ -456,30 +546,341 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {/* Installation Progress - Show when scheduled or in progress */}
-          {(request.scheduledInstallationDate || request.status === 'Installation In Progress' || request.installationProgress > 0) && (
-            <div className="bg-purple-50 border-l-4 border-purple-400 p-4 mt-4">
-              <h4 className="text-md font-bold text-purple-800 mb-2">Installation Progress</h4>
-              <div className="w-full bg-purple-200 rounded-full h-3 mb-2">
-                <div 
-                  className="bg-purple-600 h-3 rounded-full transition-all duration-300"
-                  style={{ width: `${request.installationProgress || 0}%` }}
-                ></div>
-              </div>
-              <p className="text-sm text-purple-700">
-                {request.status === 'Completed' ? '100% Complete' :
-                 request.status === 'Installation In Progress' ? `${request.installationProgress || 0}% Complete` :
-                 request.scheduledInstallationDate ? 'Scheduled - Not Started' :
-                 '0% Complete'}
-              </p>
-              {request.installationNotes && (
-                <p className="text-sm text-purple-600 mt-2 italic">{request.installationNotes}</p>
+          {/* Installation Notes - Show when available */}
+          {request.installationNotes && !request.scheduledInstallationDate && (
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-4">
+              <h4 className="text-md font-bold text-blue-800 mb-2">Installation Notes</h4>
+              <p className="text-sm text-blue-700">{request.installationNotes}</p>
+            </div>
+          )}
+
+          {/* --- INSTALLER ACTIONS SECTION --- */}
+          {isAssignedInstaller && (
+            <div className="bg-indigo-50 border-l-4 border-indigo-400 p-4 mt-6">
+              <h4 className="text-md font-bold text-indigo-800 mb-3">Installation Actions</h4>
+              
+              {/* Show propose date button for pending projects */}
+              {((request.status === 'Design Complete' || 
+                 request.status === 'Awaiting Client Review' || 
+                 request.status === 'Assigned' ||
+                 (request.requestType === 'Installation Only' && (request.status === 'New' || request.status === 'Assigned'))) && 
+                !request.scheduledInstallationDate) && (
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  className="btn-primary bg-green-600 hover:bg-green-700 mb-2 mr-2"
+                >
+                  Propose Installation Date
+                </button>
+              )}
+              
+              {/* Show start installation button for scheduled projects */}
+              {request.scheduledInstallationDate && request.status !== 'Installation In Progress' && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await requestsAPI.updateInstallationProgress(request._id, {
+                        installationProgress: 10,
+                        installationNotes: 'Installation started'
+                      });
+                      toast.success('Installation started!');
+                      setRefreshToggle(p => !p);
+                    } catch (error) {
+                      toast.error('Failed to start installation');
+                    }
+                  }}
+                  className="btn-primary bg-indigo-600 hover:bg-indigo-700 mb-2 mr-2"
+                >
+                  Start Installation
+                </button>
+              )}
+              
+              {/* Show update progress and complete buttons for in-progress installations */}
+              {/* Only show complete button if installation date was proposed and work has started */}
+              {request.status === 'Installation In Progress' && (
+                <>
+                  <button
+                    onClick={() => setShowProgressModal(true)}
+                    className="btn-primary bg-blue-600 hover:bg-blue-700 mb-2 mr-2"
+                  >
+                    Update Progress
+                  </button>
+                  {/* Only show Mark Complete if installation date was proposed and progress > 0 */}
+                  {request.scheduledInstallationDate && request.installationProgress > 0 && (
+                    <button
+                      onClick={() => setShowCompleteModal(true)}
+                      className="btn-primary bg-green-600 hover:bg-green-700 mb-2"
+                    >
+                      Mark Complete
+                    </button>
+                  )}
+                  {/* Show warning if prerequisites not met */}
+                  {(!request.scheduledInstallationDate || !request.installationProgress || request.installationProgress <= 0) && (
+                    <div className="text-xs text-yellow-600 mt-2 mb-2">
+                      {!request.scheduledInstallationDate && (
+                        <p>⚠️ Please propose an installation date first.</p>
+                      )}
+                      {request.scheduledInstallationDate && (!request.installationProgress || request.installationProgress <= 0) && (
+                        <p>⚠️ Please start the installation work first.</p>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
           
         </div>
       </div>
+
+      {/* Installer Modals */}
+      {showScheduleModal && request && (
+        <ScheduleModal
+          request={request}
+          onClose={() => setShowScheduleModal(false)}
+          onSuccess={() => {
+            setRefreshToggle(p => !p);
+            setShowScheduleModal(false);
+          }}
+        />
+      )}
+
+      {showProgressModal && request && (
+        <ProgressModal
+          request={request}
+          onClose={() => setShowProgressModal(false)}
+          onSuccess={() => {
+            setRefreshToggle(p => !p);
+            setShowProgressModal(false);
+          }}
+        />
+      )}
+
+      {showCompleteModal && request && (
+        <CompleteModal
+          request={request}
+          onClose={() => setShowCompleteModal(false)}
+          onSuccess={() => {
+            setRefreshToggle(p => !p);
+            setShowCompleteModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }
+
+// Schedule Installation Modal
+const ScheduleModal = ({ request, onClose, onSuccess }) => {
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const finalDate = scheduledDate && scheduledTime 
+        ? `${scheduledDate}T${scheduledTime}` 
+        : scheduledDate 
+        ? `${scheduledDate}T09:00` 
+        : null;
+      
+      if (!finalDate) {
+        toast.error('Please select a date and time');
+        return;
+      }
+
+      await requestsAPI.scheduleInstallation(request._id, {
+        scheduledInstallationDate: finalDate,
+        installationNotes: notes
+      });
+      toast.success('Installation date proposed successfully!');
+      onSuccess();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to schedule installation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+        <div className="mt-3">
+          <h3 className="text-xl font-medium text-gray-900 mb-2">Propose Installation Date</h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Preferred Installation Date *
+              </label>
+              <input
+                type="date"
+                value={scheduledDate}
+                onChange={(e) => setScheduledDate(e.target.value)}
+                className="input-field"
+                required
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Preferred Time *
+              </label>
+              <input
+                type="time"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+                className="input-field"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Additional Notes (Optional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={4}
+                className="input-field"
+                placeholder="Equipment needed, special requirements, access instructions, etc."
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button type="button" onClick={onClose} className="btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" disabled={loading} className="btn-primary">
+                {loading ? 'Submitting...' : 'Propose Installation Date'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Update Progress Modal
+const ProgressModal = ({ request, onClose, onSuccess }) => {
+  const [progress, setProgress] = useState(request.installationProgress || 0);
+  const [notes, setNotes] = useState(request.installationNotes || '');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await requestsAPI.updateInstallationProgress(request._id, {
+        installationProgress: progress,
+        installationNotes: notes
+      });
+      toast.success('Progress updated successfully!');
+      onSuccess();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update progress');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+        <div className="mt-3">
+          <h3 className="text-xl font-medium text-gray-900 mb-4">Update Installation Progress</h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Installation Progress: {progress}%
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={progress}
+                onChange={(e) => setProgress(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Progress Notes (Optional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={4}
+                className="input-field"
+                placeholder="Update on installation progress, issues encountered, next steps, etc."
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button type="button" onClick={onClose} className="btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" disabled={loading} className="btn-primary">
+                {loading ? 'Updating...' : 'Update Progress'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Complete Installation Modal
+const CompleteModal = ({ request, onClose, onSuccess }) => {
+  const [completionNotes, setCompletionNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await requestsAPI.completeInstallation(request._id, {
+        completionNotes: completionNotes
+      });
+      toast.success('Installation marked as complete!');
+      onSuccess();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to complete installation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+        <div className="mt-3">
+          <h3 className="text-xl font-medium text-gray-900 mb-4">Complete Installation</h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Completion Notes (Optional but Recommended)
+              </label>
+              <textarea
+                value={completionNotes}
+                onChange={(e) => setCompletionNotes(e.target.value)}
+                rows={5}
+                className="input-field"
+                placeholder="Describe what was installed, any issues encountered, final configuration notes, testing results, etc."
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button type="button" onClick={onClose} className="btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" disabled={loading} className="btn-primary bg-green-600 hover:bg-green-700">
+                {loading ? 'Completing...' : 'Mark as Complete'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
