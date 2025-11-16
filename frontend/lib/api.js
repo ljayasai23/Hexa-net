@@ -4,10 +4,29 @@ import axios from 'axios';
 // Base URL for the API. 
 // In production (Vercel), this is set to https://hexa-net.onrender.com
 // via the NEXT_PUBLIC_API_URL environment variable.
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+// For local development, dynamically detect the backend URL based on current hostname
+const getBaseURL = () => {
+  // If environment variable is set, use it (for production)
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // For client-side (browser), detect the current hostname
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // If accessing from localhost, use localhost
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+    // If accessing from a different machine, use the same hostname with port 5000
+    return `http://${hostname}:5000`;
+  }
+  
+  // For server-side rendering, default to localhost
+  return 'http://localhost:5000';
+};
 
-// --- REMOVED: getApiUrl function and dynamic hostname/port logic. ---
-// This prevents the incorrect construction of: http://hexa-net.vercel.app:5000
+const BASE_URL = getBaseURL();
 
 // Create axios instance with the resolved baseURL
 const api = axios.create({
@@ -21,11 +40,23 @@ const api = axios.create({
 
 console.log('🌐 Axios Base URL set to:', api.defaults.baseURL);
 
-// Request interceptor: Add auth token
+// Request interceptor: Add auth token and dynamically set baseURL
 api.interceptors.request.use(
   (config) => {
-    // Note: Since we are using a static BASE_URL, we don't need to recalculate 
-    // it here, only add the token.
+    // Dynamically recalculate baseURL for each request (in case hostname changed)
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      let backendURL;
+      
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        backendURL = 'http://localhost:5000';
+      } else {
+        backendURL = `http://${hostname}:5000`;
+      }
+      
+      // Update baseURL if it's different (for client-side requests)
+      config.baseURL = `${backendURL}/api`;
+    }
 
     const token = localStorage.getItem('token');
     if (token) {

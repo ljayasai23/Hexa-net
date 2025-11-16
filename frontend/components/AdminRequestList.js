@@ -474,9 +474,23 @@ const ApproveDesignModal = ({ request, onApprove, onClose }) => {
               <div className="space-y-3">
                 <a
                   href={`${(() => {
+                    // Try environment variable first
                     if (process.env.NEXT_PUBLIC_API_URL) {
                       return process.env.NEXT_PUBLIC_API_URL.replace('/api', '');
                     }
+                    
+                    // In browser, dynamically detect the backend URL based on current hostname
+                    if (typeof window !== 'undefined') {
+                      const hostname = window.location.hostname;
+                      // If accessing from localhost, use localhost
+                      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                        return 'http://localhost:5000';
+                      }
+                      // If accessing from a different machine, use the same hostname with port 5000
+                      return `http://${hostname}:5000`;
+                    }
+                    
+                    // Server-side fallback
                     return 'http://localhost:5000';
                   })()}${design.reportPdfUrl}`}
                   target="_blank"

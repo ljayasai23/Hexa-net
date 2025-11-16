@@ -395,26 +395,25 @@ const DesignModal = ({ design, onClose }) => {
 
   // Get API base URL for file access (without /api suffix)
   const getApiBaseUrl = () => {
-    if (typeof window !== 'undefined') {
-      // Try to get from localStorage first (set by API interceptor)
-      const storedApiUrl = localStorage.getItem('apiBaseUrl');
-      if (storedApiUrl) {
-        return storedApiUrl;
-      }
-      
-      // Try environment variable
-      if (process.env.NEXT_PUBLIC_API_URL) {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-        return apiUrl.replace('/api', '');
-      }
-      
-      // Fallback: use server IP directly
-      return 'http://192.168.43.206:5000';
+    // Try environment variable first
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      return apiUrl.replace('/api', '');
     }
     
-    // Server-side or fallback
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-    return apiUrl.replace('/api', '');
+    // In browser, dynamically detect the backend URL based on current hostname
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      // If accessing from localhost, use localhost
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:5000';
+      }
+      // If accessing from a different machine, use the same hostname with port 5000
+      return `http://${hostname}:5000`;
+    }
+    
+    // Server-side fallback
+    return 'http://localhost:5000';
   };
   
   const API_BASE_URL = getApiBaseUrl();

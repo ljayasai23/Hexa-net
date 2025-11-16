@@ -19,6 +19,7 @@ export default function ProjectDetail() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approvalSent, setApprovalSent] = useState(false);
 
   const fetchData = async () => {
     if (!id) return;
@@ -28,6 +29,17 @@ export default function ProjectDetail() {
       const requestResponse = await requestsAPI.getById(id);
       const req = requestResponse.data.request;
       setRequest(req);
+      
+      // Initialize approvalSent based on request status (prevents button from showing after reload)
+      // Normalize status by trimming whitespace for robust comparison
+      // If status is past 'Awaiting Client Review', approval was already sent
+      const normalizedStatus = req?.status?.trim();
+      const approvedStatuses = ['Design Complete', 'Installation In Progress', 'Completed'];
+      if (approvedStatuses.includes(normalizedStatus)) {
+        setApprovalSent(true);
+      } else {
+        setApprovalSent(false);
+      }
       
       // 2. Fetch Design (if design exists - could be ID or object)
       if (req.design) {
@@ -61,6 +73,19 @@ export default function ProjectDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.isReady, id, user, refreshToggle]);
 
+  // Reset approvalSent flag when request status changes
+  // Once status is past 'Awaiting Client Review', approval was already sent
+  useEffect(() => {
+    const currentStatus = request?.status?.trim();
+    const approvedStatuses = ['Design Complete', 'Installation In Progress', 'Completed'];
+    if (approvedStatuses.includes(currentStatus)) {
+      setApprovalSent(true);
+    } else if (currentStatus === 'Awaiting Client Review') {
+      // Reset if status goes back to review (shouldn't happen, but just in case)
+      setApprovalSent(false);
+    }
+  }, [request?.status]);
+
   const handleClientAccept = async () => {
     // Reality check: Warn user if they proceed without confirming PDF link is okay
     if (!design?.reportPdfUrl) {
@@ -87,27 +112,25 @@ export default function ProjectDetail() {
   // --- PDF URL Construction ---
   // FIX: Ensure PDF URL is constructed correctly for static file access
   const getApiBaseUrl = () => {
-    // In browser, try to get the API base URL from localStorage (set by axios interceptor)
-    if (typeof window !== 'undefined') {
-      // Try to get from localStorage first (set by API interceptor)
-      const storedApiUrl = localStorage.getItem('apiBaseUrl');
-      if (storedApiUrl) {
-        return storedApiUrl;
-      }
-      
-      // Try environment variable
-      if (process.env.NEXT_PUBLIC_API_URL) {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-        return apiUrl.replace('/api', '');
-      }
-      
-      // Fallback: use server IP directly
-      return 'http://192.168.43.206:5000';
+    // Try environment variable first
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      return apiUrl.replace('/api', '');
     }
     
-    // Server-side or fallback
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-    return apiUrl.replace('/api', '');
+    // In browser, dynamically detect the backend URL based on current hostname
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      // If accessing from localhost, use localhost
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:5000';
+      }
+      // If accessing from a different machine, use the same hostname with port 5000
+      return `http://${hostname}:5000`;
+    }
+    
+    // Server-side fallback
+    return 'http://localhost:5000';
   };
   
   const pdfUrl = design?.reportPdfUrl 
@@ -519,9 +542,21 @@ export default function ProjectDetail() {
                 </a>
                 
                 {/* Accept Design Button - Show when design is approved and client hasn't accepted yet */}
-                {/* Show for clients when: design is approved AND status allows acceptance */}
-                {user?.role === 'Client' && isDesignApproved && design?.isApproved && 
-                 request?.status !== 'Completed' && request?.status !== 'Design Complete' && (
+                {/* CRITICAL: Only show button if status is 'Awaiting Client Review' */}
+                {/* Once client approves (status becomes 'Design Complete'), button should NEVER show again */}
+                {/* Even if status changes to 'Installation In Progress' or 'Completed', button stays hidden */}
+                {/* Normalize status for comparison to handle any whitespace issues */}
+                {(() => {
+                  const currentStatus = request?.status?.trim();
+                  // Only show button when status is exactly 'Awaiting Client Review'
+                  // Once approved, status becomes 'Design Complete', then 'Installation In Progress', then 'Completed'
+                  // Button should never show after 'Design Complete'
+                  const shouldShowButton = user?.role === 'Client' && 
+                                          isDesignApproved && 
+                                          design?.isApproved && 
+                                          currentStatus === 'Awaiting Client Review';
+                  return shouldShowButton;
+                })() && (
                   <button
                     onClick={() => setShowApproveModal(true)}
                     className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
@@ -531,6 +566,24 @@ export default function ProjectDetail() {
                     </svg>
                     Send Approval Request to Admin
                   </button>
+                )}
+                
+                {/* Show success message if approval was already sent (based on status) */}
+                {/* Show message if status is past 'Awaiting Client Review' (i.e., already approved) */}
+                {(() => {
+                  const currentStatus = request?.status?.trim();
+                  const approvedStatuses = ['Design Complete', 'Installation In Progress', 'Completed'];
+                  return user?.role === 'Client' && 
+                         isDesignApproved && 
+                         design?.isApproved && 
+                         approvedStatuses.includes(currentStatus);
+                })() && (
+                  <div className="inline-flex items-center px-4 py-2 border border-green-300 text-sm font-medium rounded-md text-green-700 bg-green-50">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Approval Request Sent Successfully
+                  </div>
                 )}
               </div>
             </div>
@@ -661,6 +714,7 @@ export default function ProjectDetail() {
           request={request}
           design={design}
           onSuccess={() => {
+            setApprovalSent(true); // Mark approval as sent immediately
             setShowApproveModal(false);
             setRefreshToggle(p => !p);
           }}
@@ -687,13 +741,16 @@ const ApproveDesignModal = ({ request, design, onClose, onSuccess }) => {
         return;
       }
 
-      await requestsAPI.markClientComplete(request._id);
+      const response = await requestsAPI.markClientComplete(request._id);
+      // Verify the response contains updated status
+      console.log('✅ Approval response:', response.data);
       toast.success('Design approval request sent to admin successfully!');
       onClose();
       // Wait a moment for the backend to process, then refresh
+      // Increased delay to ensure backend has fully processed the update
       setTimeout(() => {
         onSuccess();
-      }, 500);
+      }, 1000);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to send approval request.');
     } finally {

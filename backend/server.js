@@ -20,19 +20,50 @@ const FRONTEND_URL = 'https://hexa-net.vercel.app';
 const allowedOrigins = [
   FRONTEND_URL, 
   'http://localhost:3000', // Still allow local development
-  'http://localhost:5000' // If the frontend runs on a different local port
+  'http://localhost:5000', // If the frontend runs on a different local port
+  'http://192.168.43.26:3000', // Allow access from Kali machine IP
+  'http://192.168.43.4:3000', // Allow access from Windows 11 machine
+  // Allow any origin in the 192.168.43.x network for development
+  /^http:\/\/192\.168\.43\.\d+:3000$/, // Pattern for local network access
 ];
 
 // Configure CORS: Allowing only the specific Vercel URL and local hosts
 app.use(cors({
     origin: (origin, callback) => {
-        // Check if the requesting origin is in our allowed list
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            // Block requests from unauthorized domains
-            callback(new Error(`CORS policy violation: Access from ${origin} blocked.`));
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) {
+            return callback(null, true);
         }
+        
+        // Check if the requesting origin is in our allowed list (exact match)
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        
+        // Check if the origin matches any regex pattern in allowedOrigins
+        const isAllowed = allowedOrigins.some(allowedOrigin => {
+            if (allowedOrigin instanceof RegExp) {
+                return allowedOrigin.test(origin);
+            }
+            return false;
+        });
+        
+        if (isAllowed) {
+            return callback(null, true);
+        }
+        
+        // For development, allow local network IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+        if (process.env.NODE_ENV !== 'production') {
+            const localNetworkPattern = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+):\d+$/;
+            if (localNetworkPattern.test(origin)) {
+                console.log(`✅ Allowing local network origin: ${origin}`);
+                return callback(null, true);
+            }
+        }
+        
+        // Block requests from unauthorized domains
+        console.log(`❌ CORS policy violation: Access from ${origin} blocked.`);
+        callback(new Error(`CORS policy violation: Access from ${origin} blocked.`));
     },
     credentials: true, // Allow cookies/credentials to be sent (needed for auth)
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

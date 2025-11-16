@@ -514,12 +514,14 @@ router.get('/request/:requestId', auth, async (req, res) => {
     
     // AUTO-FIX: If design exists but status is incorrect (e.g., "Assigned" when design is created)
     // This fixes data inconsistencies where design was created but status wasn't updated
+    // IMPORTANT: Include 'Design Complete' as a valid status - don't reset it after client approval
     if (design && request) {
       const hasDesignButWrongStatus = 
         request.design && 
         request.status !== 'Design In Progress' && 
         request.status !== 'Design Submitted' && 
         request.status !== 'Awaiting Client Review' && 
+        request.status !== 'Design Complete' &&  // CRITICAL: Don't reset this status after client approval
         request.status !== 'Completed' &&
         request.status !== 'Installation In Progress';
       
