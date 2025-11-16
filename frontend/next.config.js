@@ -6,7 +6,10 @@ const nextConfig = {
     domains: ['localhost'],
   },
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
+    // In production (Vercel), this should be set to https://hexa-net.onrender.com/api
+    // In local development, it will default to http://localhost:5000/api
+    // But we allow it to be empty so dynamic detection can work for WiFi access
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   },
 
 async headers() {
@@ -29,14 +32,15 @@ async headers() {
     ];
   }
   
-  // Production CSP
+  // Production CSP - Allow connections to Render backend
   return [
     {
       source: '/:path*',
       headers: [
         {
           key: 'Content-Security-Policy',
-          value: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:;`,
+          // Allow connections to Render backend (https://hexa-net.onrender.com)
+          value: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://hexa-net.onrender.com https:;`,
         },
       ],
     },

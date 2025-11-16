@@ -6,19 +6,33 @@ import axios from 'axios';
 // via the NEXT_PUBLIC_API_URL environment variable.
 // For local development, dynamically detect the backend URL based on current hostname
 const getBaseURL = () => {
-  // If environment variable is set, use it (for production)
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+  // Check for environment variable (available at build time in Next.js)
+  // In production (Vercel), this will be set to https://hexa-net.onrender.com/api
+  const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envApiUrl) {
+    // Remove /api suffix if present (we add it later)
+    return envApiUrl.replace(/\/api$/, '');
   }
   
   // For client-side (browser), detect the current hostname
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
     // If accessing from localhost, use localhost
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:5000';
     }
-    // If accessing from a different machine, use the same hostname with port 5000
+    
+    // If accessing from Vercel domain, this shouldn't happen (env var should be set)
+    // But if it does, we can't use localhost, so we'd need the Render URL
+    if (hostname.includes('vercel.app')) {
+      // Fallback to Render backend if env var wasn't set
+      return 'https://hexa-net.onrender.com';
+    }
+    
+    // For local network access (e.g., 192.168.43.26), use the same hostname with port 5000
+    // This works when accessing from another device on the same WiFi
     return `http://${hostname}:5000`;
   }
   
@@ -38,24 +52,49 @@ const api = axios.create({
   },
 });
 
-console.log('🌐 Axios Base URL set to:', api.defaults.baseURL);
+// Log initial base URL (this is set at module load, may be overridden by interceptor)
+if (typeof window !== 'undefined') {
+  console.log('🌐 Initial Axios Base URL:', api.defaults.baseURL);
+  console.log('🌐 Current hostname:', window.location.hostname);
+  console.log('🌐 NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL || 'not set');
+}
 
 // Request interceptor: Add auth token and dynamically set baseURL
 api.interceptors.request.use(
   (config) => {
-    // Dynamically recalculate baseURL for each request (in case hostname changed)
+    // Always recalculate baseURL for each request to handle different scenarios
     if (typeof window !== 'undefined') {
+      const envApiUrl = process.env.NEXT_PUBLIC_API_URL;
       const hostname = window.location.hostname;
-      let backendURL;
+      let finalBaseURL;
       
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        backendURL = 'http://localhost:5000';
-      } else {
-        backendURL = `http://${hostname}:5000`;
+      // Priority 1: If environment variable is set (production/Vercel), use it
+      if (envApiUrl) {
+        finalBaseURL = envApiUrl.includes('/api') ? envApiUrl : `${envApiUrl}/api`;
+        console.log('🔵 Using production API URL from env:', finalBaseURL);
+      } 
+      // Priority 2: Check if we're on Vercel domain (fallback)
+      else if (hostname.includes('vercel.app')) {
+        finalBaseURL = 'https://hexa-net.onrender.com/api';
+        console.log('🟡 Using Render backend (Vercel fallback):', finalBaseURL);
+      }
+      // Priority 3: Local development - detect based on hostname
+      else {
+        let backendURL;
+        
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+          backendURL = 'http://localhost:5000';
+        } else {
+          // Local network access (e.g., accessing from Windows at 192.168.43.4 
+          // to Kali at 192.168.43.26:3000, so hostname is 192.168.43.26)
+          backendURL = `http://${hostname}:5000`;
+        }
+        
+        finalBaseURL = `${backendURL}/api`;
+        console.log('🟢 Using local network API URL:', finalBaseURL, '(hostname:', hostname + ')');
       }
       
-      // Update baseURL if it's different (for client-side requests)
-      config.baseURL = `${backendURL}/api`;
+      config.baseURL = finalBaseURL;
     }
 
     const token = localStorage.getItem('token');
