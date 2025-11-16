@@ -104,9 +104,9 @@ const ProjectCard = ({ project }) => {
           </div>
         </div>
         <div className="flex space-x-2">
-          {/* RESOLUTION: Keeping the necessary link format for project-detail.js */}
+          {/* Use dynamic route /project/[id] for better Next.js routing */}
           <Link 
-            href={`/project-detail?id=${project._id}`}
+            href={`/project/${project._id}`}
             className="text-primary-600 hover:text-primary-700 text-sm font-medium"
           >
             View Details
@@ -177,11 +177,34 @@ const ProjectCard = ({ project }) => {
               <div className="flex justify-between items-center mb-1">
                 <span className="text-xs font-medium text-gray-600">Installation Progress</span>
                 <span className="text-xs text-gray-600">
-                  {project.status === 'Completed' ? '100%' :
-                   project.status === 'Installation In Progress' ? `${project.installationProgress || 0}%` :
-                   project.installationProgress && project.installationProgress > 0 ? `${project.installationProgress}%` :
-                   project.scheduledInstallationDate ? '10%' :
-                   project.assignedInstaller ? '10%' : '0%'}
+                  {(() => {
+                    // For "Both Design and Installation" requests, installation progress should only show 100% if:
+                    // 1. Status is "Completed" AND installer is assigned (installation was actually done)
+                    if (project.requestType === 'Both Design and Installation') {
+                      if (project.status === 'Completed' && project.assignedInstaller) {
+                        return '100%';
+                      }
+                      if (project.status === 'Installation In Progress') {
+                        return `${project.installationProgress || 0}%`;
+                      }
+                      if (project.installationProgress && project.installationProgress > 0) {
+                        return `${project.installationProgress}%`;
+                      }
+                      if (project.scheduledInstallationDate) {
+                        return '10%';
+                      }
+                      if (project.assignedInstaller) {
+                        return '10%';
+                      }
+                      return '0%';
+                    }
+                    // For "Installation Only" requests, use the original logic
+                    return project.status === 'Completed' ? '100%' :
+                           project.status === 'Installation In Progress' ? `${project.installationProgress || 0}%` :
+                           project.installationProgress && project.installationProgress > 0 ? `${project.installationProgress}%` :
+                           project.scheduledInstallationDate ? '10%' :
+                           project.assignedInstaller ? '10%' : '0%';
+                  })()}
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
@@ -195,11 +218,34 @@ const ProjectCard = ({ project }) => {
                     'bg-gray-400'
                   }`}
                   style={{ 
-                    width: project.status === 'Completed' ? '100%' :
-                           project.status === 'Installation In Progress' ? `${project.installationProgress || 0}%` :
-                           project.installationProgress && project.installationProgress > 0 ? `${project.installationProgress}%` :
-                           project.scheduledInstallationDate ? '10%' :
-                           project.assignedInstaller ? '10%' : '0%'
+                    width: (() => {
+                      // For "Both Design and Installation" requests, installation progress should only show 100% if:
+                      // 1. Status is "Completed" AND installer is assigned (installation was actually done)
+                      if (project.requestType === 'Both Design and Installation') {
+                        if (project.status === 'Completed' && project.assignedInstaller) {
+                          return '100%';
+                        }
+                        if (project.status === 'Installation In Progress') {
+                          return `${project.installationProgress || 0}%`;
+                        }
+                        if (project.installationProgress && project.installationProgress > 0) {
+                          return `${project.installationProgress}%`;
+                        }
+                        if (project.scheduledInstallationDate) {
+                          return '10%';
+                        }
+                        if (project.assignedInstaller) {
+                          return '10%';
+                        }
+                        return '0%';
+                      }
+                      // For "Installation Only" requests, use the original logic
+                      return project.status === 'Completed' ? '100%' :
+                             project.status === 'Installation In Progress' ? `${project.installationProgress || 0}%` :
+                             project.installationProgress && project.installationProgress > 0 ? `${project.installationProgress}%` :
+                             project.scheduledInstallationDate ? '10%' :
+                             project.assignedInstaller ? '10%' : '0%';
+                    })()
                   }}
                 ></div>
               </div>

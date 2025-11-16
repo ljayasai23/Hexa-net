@@ -142,89 +142,15 @@ export default function InstallerDashboard() {
   // Filter out completed requests - only show pending/active ones
   // NOTE: Backend already filters by assignedInstaller, so all requests returned are assigned to this installer
   // We only need to filter out completed requests on the frontend
+  // Backend already filters by assignedInstaller, so we trust all returned requests are assigned
   const activeRequests = useMemo(() => {
-    if (!Array.isArray(requests) || !user?._id) {
-      console.log('InstallerDashboard: Early return - requests:', requests, 'user:', user);
+    if (!Array.isArray(requests)) {
       return [];
     }
     
     // Backend already filters by assignedInstaller, so we trust all returned requests are assigned
     // Only filter out completed requests
-    const filtered = requests.filter(r => {
-      if (!r) {
-        console.log('InstallerDashboard: Skipping null/undefined request');
-        return false;
-      }
-      
-      // Skip completed requests
-      if (r.status === 'Completed') {
-        console.log('InstallerDashboard: Skipping completed request:', r._id, 'Status:', r.status);
-        return false;
-      }
-      
-      // Backend already filtered by assignedInstaller, so we trust the request is assigned
-      // But we'll do a safety check and log if there's a mismatch
-      const installerId = r.assignedInstaller?._id || r.assignedInstaller;
-      if (installerId) {
-        const installerIdStr = installerId.toString();
-        const userIdStr = user._id.toString();
-        if (installerIdStr !== userIdStr) {
-          console.warn('InstallerDashboard: WARNING - Request assignedInstaller mismatch (backend should have filtered this):', {
-            requestId: r._id,
-            requestInstallerId: installerIdStr,
-            currentUserId: userIdStr,
-            status: r.status
-          });
-          // Still include it since backend filtered it - this is just a warning
-        }
-      } else {
-        console.warn('InstallerDashboard: WARNING - Request has no assignedInstaller field (backend should have filtered this):', {
-          requestId: r._id,
-          status: r.status
-        });
-        // Still include it since backend filtered it - this is just a warning
-      }
-      
-      // Include all non-completed requests since backend already filtered by assignedInstaller
-      return true;
-    });
-    
-    // Debug: Log filtered requests
-    console.log('InstallerDashboard: Total requests from API:', requests.length);
-    console.log('InstallerDashboard: Current user ID:', user._id);
-    console.log('InstallerDashboard: Current user role:', user.role);
-    console.log('InstallerDashboard: Filtered active requests (excluding completed):', filtered.length);
-    
-    if (filtered.length > 0) {
-      console.log('InstallerDashboard: Active requests:', filtered.map(r => ({ 
-        id: r._id, 
-        status: r.status, 
-        campus: r.requirements?.campusName,
-        assignedInstaller: r.assignedInstaller?._id || r.assignedInstaller,
-        installationProgress: r.installationProgress
-      })));
-    } else if (requests.length > 0) {
-      // Debug: Show why requests were filtered out
-      console.log('InstallerDashboard: All requests from API (for debugging):', requests.map(r => {
-        const installerId = r.assignedInstaller?._id || r.assignedInstaller;
-        const installerIdStr = installerId ? installerId.toString() : null;
-        const userIdStr = user._id.toString();
-        return {
-          id: r._id,
-          status: r.status,
-          campus: r.requirements?.campusName,
-          assignedInstaller: installerId,
-          assignedInstallerStr: installerIdStr,
-          userInstallerId: userIdStr,
-          isCompleted: r.status === 'Completed',
-          willBeIncluded: installerIdStr === userIdStr && r.status !== 'Completed'
-        };
-      }));
-    } else {
-      console.log('InstallerDashboard: No requests received from API');
-    }
-    
-    return filtered;
+    return requests.filter(r => r && r.status !== 'Completed');
   }, [requests, user]);
 
   // Calculate stats
@@ -383,37 +309,14 @@ export default function InstallerDashboard() {
             />
           </div>
         ) : requests.length > 0 ? (
-          <div className="card p-6">
-            <div className="text-center py-8">
-              <p className="text-gray-500 mb-2">No active projects found.</p>
-              <p className="text-sm text-gray-400 mb-2">
-                Total requests received from API: {requests.length}
-              </p>
-              <p className="text-xs text-gray-500 mb-4">
-                All received requests were filtered out. This might mean:
-              </p>
-              <ul className="text-xs text-gray-500 text-left max-w-md mx-auto space-y-1">
-                <li>• All requests are marked as "Completed"</li>
-                <li>• assignedInstaller field is missing or doesn't match your user ID</li>
-                <li>• Check browser console (F12) for detailed debugging information</li>
-              </ul>
-              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-left max-w-md mx-auto">
-                <p className="font-semibold text-yellow-800 mb-1">Debug Info:</p>
-                <p className="text-yellow-700">User ID: {user?._id}</p>
-                <p className="text-yellow-700">User Role: {user?.role}</p>
-                {requests.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-yellow-700 font-semibold">Received Requests:</p>
-                    {requests.map((r, idx) => (
-                      <div key={idx} className="ml-2 text-yellow-600">
-                        • {r.requirements?.campusName || r._id} - Status: {r.status} - 
-                        AssignedInstaller: {r.assignedInstaller?._id || r.assignedInstaller || 'None'}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="card text-center py-12">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">All Projects Completed</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              All your assigned projects have been completed.
+            </p>
           </div>
         ) : (
           <div className="card text-center py-12">

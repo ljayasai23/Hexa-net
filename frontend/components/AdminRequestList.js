@@ -473,10 +473,12 @@ const ApproveDesignModal = ({ request, onApprove, onClose }) => {
               
               <div className="space-y-3">
                 <a
-                  href={`${process.env.NEXT_PUBLIC_API_URL?.replace(
-                    '/api',
-                    ''
-                  ) || 'http://localhost:5000'}${design.reportPdfUrl}`}
+                  href={`${(() => {
+                    if (process.env.NEXT_PUBLIC_API_URL) {
+                      return process.env.NEXT_PUBLIC_API_URL.replace('/api', '');
+                    }
+                    return 'http://localhost:5000';
+                  })()}${design.reportPdfUrl}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-md"

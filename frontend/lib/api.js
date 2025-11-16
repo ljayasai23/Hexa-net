@@ -3,33 +3,62 @@ import axios from 'axios';
 // Dynamically determine API URL based on current hostname
 // This function runs at runtime in the browser, not at build time
 const getApiUrl = () => {
-  // If running in browser, detect the hostname and use it for API
+  // If running in browser, detect the hostname and use server IP for API
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     const port = '5000';
     
-    // If accessing via IP address (not localhost), use that IP for API
+    // If accessing via IP address (not localhost), use server IP (192.168.43.206)
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      const apiUrl = `http://${hostname}:${port}/api`;
+      // Use the server IP instead of client IP
+      const serverIP = '192.168.43.206';
+      const apiUrl = `http://${serverIP}:${port}/api`;
       console.log('🌐 Using API URL:', apiUrl);
+      // Store base URL for PDF access
+      localStorage.setItem('apiBaseUrl', `http://${serverIP}:${port}`);
       return apiUrl;
     }
   }
   
   // Check if we have an explicit API URL in environment (for build time)
   if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    // Store base URL for PDF access
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('apiBaseUrl', apiUrl.replace('/api', ''));
+    }
+    return apiUrl;
   }
   
   // Default fallback
   const defaultUrl = 'http://localhost:5000/api';
   console.log('🌐 Using default API URL:', defaultUrl);
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('apiBaseUrl', 'http://localhost:5000');
+  }
   return defaultUrl;
 };
 
 // Create axios instance with dynamic baseURL
+// Note: The interceptor will override this on each request, but we set a good default
+const getInitialBaseURL = () => {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // PRIORITY: If accessing from non-localhost IP, ALWAYS use server IP (override env var)
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      // Use server IP for non-localhost access (overrides env var)
+      return 'http://192.168.43.206:5000/api';
+    }
+    // Only use env var if accessing from localhost
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return process.env.NEXT_PUBLIC_API_URL;
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+};
+
 const api = axios.create({
-  baseURL: typeof window !== 'undefined' ? getApiUrl() : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'),
+  baseURL: getInitialBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -38,17 +67,31 @@ const api = axios.create({
 // Request interceptor: dynamically set API URL and add auth token
 api.interceptors.request.use(
   (config) => {
-    // Recalculate API URL on each request to handle dynamic hostname changes
+    // ALWAYS recalculate API URL on each request to handle dynamic hostname changes
     // This ensures it works when accessing from different machines
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
       const port = '5000';
       
+      // PRIORITY: If accessing from non-localhost IP, ALWAYS use server IP (override env var)
       if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-        config.baseURL = `http://${hostname}:${port}/api`;
-        console.log('🌐 API Request to:', config.baseURL + config.url);
+        // If accessing from IP, ALWAYS use server IP (192.168.43.206)
+        // This overrides any environment variable that might be set to localhost
+        const serverIP = '192.168.43.206';
+        config.baseURL = `http://${serverIP}:${port}/api`;
+        localStorage.setItem('apiBaseUrl', `http://${serverIP}:${port}`);
+        console.log('🌐 API Request to:', config.baseURL + (config.url || ''));
+      } else if (process.env.NEXT_PUBLIC_API_URL) {
+        // Only use env var if accessing from localhost
+        config.baseURL = process.env.NEXT_PUBLIC_API_URL;
+        // Store base URL (without /api) for PDF access
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL.replace('/api', '');
+        localStorage.setItem('apiBaseUrl', baseUrl);
+        console.log('🌐 Using env API URL:', config.baseURL);
       } else {
-        config.baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        config.baseURL = 'http://localhost:5000/api';
+        localStorage.setItem('apiBaseUrl', 'http://localhost:5000');
+        console.log('🌐 Using localhost API URL:', config.baseURL);
       }
     }
     
@@ -100,6 +143,7 @@ export const requestsAPI = {
   scheduleInstallation: (id, data) => api.put(`/requests/${id}/schedule-installation`, data),
   updateInstallationProgress: (id, data) => api.put(`/requests/${id}/installation-progress`, data),
   completeInstallation: (id, data) => api.put(`/requests/${id}/complete-installation`, data),
+  verifyInstallation: (id, data) => api.put(`/requests/${id}/verify-installation`, data),
 };
 
 // Notifications API

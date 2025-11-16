@@ -22,7 +22,7 @@ async headers() {
           {
             key: 'Content-Security-Policy',
             // Allow connections to localhost and your specific VM IP
-            value: `default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; connect-src 'self' http://localhost:5000 http://127.0.0.1:5000 http://192.168.43.206:5000 http://192.168.43.206:3000 https:;`,
+            value: `default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; connect-src 'self' http://localhost:5000 http://127.0.0.1:5000 http://192.168.43.206:5000 http://192.168.43.206:3000 https:;`,
           },
         ],
       },

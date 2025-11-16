@@ -16,6 +16,9 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
   const [refreshToggle, setRefreshToggle] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [showApproveModal, setShowApproveModal] = useState(false);
 
   const fetchData = async () => {
     if (!id) return;
@@ -81,18 +84,28 @@ export default function ProjectDetail() {
   // FIX: Use safe navigation on user._id to prevent crashes while state initializes
   const isClient = user?.role === 'Client' && (request?.client?._id?.toString() === user?._id?.toString());
   
-  const showAcceptView = isClient && request?.status === 'Awaiting Client Review';
-  
   // --- PDF URL Construction ---
   // FIX: Ensure PDF URL is constructed correctly for static file access
   const getApiBaseUrl = () => {
+    // In browser, try to get the API base URL from localStorage (set by axios interceptor)
     if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      const port = '5000';
-      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-        return `http://${hostname}:${port}`;
+      // Try to get from localStorage first (set by API interceptor)
+      const storedApiUrl = localStorage.getItem('apiBaseUrl');
+      if (storedApiUrl) {
+        return storedApiUrl;
       }
+      
+      // Try environment variable
+      if (process.env.NEXT_PUBLIC_API_URL) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+        return apiUrl.replace('/api', '');
+      }
+      
+      // Fallback: use server IP directly
+      return 'http://192.168.43.206:5000';
     }
+    
+    // Server-side or fallback
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
     return apiUrl.replace('/api', '');
   };
@@ -102,7 +115,15 @@ export default function ProjectDetail() {
     : null;
   
   // CRITICAL: Check if design is approved (handle undefined/null as false)
+  // Must be defined before showAcceptView uses it
   const isDesignApproved = design?.isApproved === true;
+  
+  // Show accept view when client can accept the design
+  // Show when: status is "Awaiting Client Review" OR design is approved and status allows acceptance
+  const showAcceptView = isClient && (
+    request?.status === 'Awaiting Client Review' || 
+    (isDesignApproved && design?.isApproved && request?.status !== 'Completed' && request?.status !== 'Design Complete')
+  );
   
   // Debug logging - must be called before any early returns
   useEffect(() => {
@@ -239,11 +260,36 @@ export default function ProjectDetail() {
                   <div className="flex justify-between items-center mb-1">
                     <h5 className="text-xs font-medium text-gray-600">Installation Progress</h5>
                     <span className="text-xs text-gray-600">
-                      {request.status === 'Completed' ? '100%' :
-                       request.status === 'Installation In Progress' ? `${request.installationProgress || 0}%` :
-                       request.installationProgress && request.installationProgress > 0 ? `${request.installationProgress}%` :
-                       request.scheduledInstallationDate ? '10%' :
-                       request.assignedInstaller ? '10%' : '0%'}
+                      {(() => {
+                        // For "Both Design and Installation" requests, installation progress should only show 100% if:
+                        // 1. Status is "Completed" AND installer is assigned (installation was actually done)
+                        // OR
+                        // 2. Status is "Installation In Progress" (installation is ongoing)
+                        if (request.requestType === 'Both Design and Installation') {
+                          if (request.status === 'Completed' && request.assignedInstaller) {
+                            return '100%';
+                          }
+                          if (request.status === 'Installation In Progress') {
+                            return `${request.installationProgress || 0}%`;
+                          }
+                          if (request.installationProgress && request.installationProgress > 0) {
+                            return `${request.installationProgress}%`;
+                          }
+                          if (request.scheduledInstallationDate) {
+                            return '10%';
+                          }
+                          if (request.assignedInstaller) {
+                            return '10%';
+                          }
+                          return '0%';
+                        }
+                        // For "Installation Only" requests, use the original logic
+                        return request.status === 'Completed' ? '100%' :
+                               request.status === 'Installation In Progress' ? `${request.installationProgress || 0}%` :
+                               request.installationProgress && request.installationProgress > 0 ? `${request.installationProgress}%` :
+                               request.scheduledInstallationDate ? '10%' :
+                               request.assignedInstaller ? '10%' : '0%';
+                      })()}
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
@@ -258,21 +304,36 @@ export default function ProjectDetail() {
                       }`}
                       style={{ 
                         width: (() => {
-                          // Always show 100% if status is Completed
+                          // For "Both Design and Installation" requests, installation progress should only show 100% if:
+                          // 1. Status is "Completed" AND installer is assigned (installation was actually done)
+                          if (request.requestType === 'Both Design and Installation') {
+                            if (request.status === 'Completed' && request.assignedInstaller) {
+                              return '100%';
+                            }
+                            if (request.status === 'Installation In Progress') {
+                              return `${request.installationProgress || 0}%`;
+                            }
+                            if (request.installationProgress && request.installationProgress > 0) {
+                              return `${request.installationProgress}%`;
+                            }
+                            if (request.scheduledInstallationDate) {
+                              return '10%';
+                            }
+                            if (request.assignedInstaller) {
+                              return '10%';
+                            }
+                            return '0%';
+                          }
+                          // For "Installation Only" requests, use the original logic
                           if (request.status === 'Completed') return '100%';
-                          // Show actual progress if installation is in progress
                           if (request.status === 'Installation In Progress') {
                             return `${request.installationProgress || 0}%`;
                           }
-                          // Show installationProgress if it's set and > 0
                           if (request.installationProgress && request.installationProgress > 0) {
                             return `${request.installationProgress}%`;
                           }
-                          // Show 10% if scheduled
                           if (request.scheduledInstallationDate) return '10%';
-                          // Show 10% if installer is assigned
                           if (request.assignedInstaller) return '10%';
-                          // Default to 0%
                           return '0%';
                         })()
                       }}
@@ -376,35 +437,8 @@ export default function ProjectDetail() {
             )}
           </div>
           
-          {/* --- CRITICAL: CLIENT ACCEPTANCE SECTION (Only shows after admin approval) --- */}
-          {showAcceptView && pdfUrl && isDesignApproved && (
-            <div className="bg-green-50 border-l-4 border-green-400 p-4 mt-6">
-              <h4 className="text-md font-bold text-green-800 mb-2">Action Required: Review Design Report</h4>
-              <p className="text-sm text-green-700 mb-4">The Admin has approved the final design. Please review the attached PDF report.</p>
-              
-              <div className="flex items-center space-x-3">
-                <a 
-                    href={pdfUrl}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                    View & Download Approved PDF
-                </a>
-                
-                <button
-                  onClick={handleClientAccept}
-                  disabled={isAccepting}
-                  className="btn-primary bg-green-600 hover:bg-green-700"
-                >
-                  {isAccepting ? 'Accepting...' : 'Design Accepted'}
-                </button>
-              </div>
-            </div>
-          )}
-          
-          {/* Show message if design exists but not approved/forwarded yet */}
-          {user?.role === 'Client' && design && design.reportPdfUrl && (!isDesignApproved || request?.status !== 'Awaiting Client Review') && (
+          {/* Show message if design exists but not approved yet (only show if design is NOT approved) */}
+          {user?.role === 'Client' && design && design.reportPdfUrl && !isDesignApproved && (
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-6">
               <h4 className="text-md font-bold text-yellow-800 mb-2">Design Pending Approval</h4>
               <p className="text-sm text-yellow-700">
@@ -413,6 +447,16 @@ export default function ProjectDetail() {
                   : request?.status === 'Design Submitted'
                   ? 'The designer has submitted the design to the admin for review. You will be notified once the admin approves the design and forwards it to you.'
                   : 'The design is currently pending admin review and approval. You will be notified once the admin approves the design and you can review it.'}
+              </p>
+            </div>
+          )}
+          
+          {/* Show installation pending message if design is approved but installation hasn't started */}
+          {user?.role === 'Client' && design && isDesignApproved && request?.requestType === 'Both Design and Installation' && !request?.scheduledInstallationDate && request?.status !== 'Completed' && (
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-6">
+              <h4 className="text-md font-bold text-blue-800 mb-2">Installation Pending</h4>
+              <p className="text-sm text-blue-700">
+                Your design has been approved! The installer will propose installation dates and start the physical installation work. You will be notified once the installation date is scheduled.
               </p>
             </div>
           )}
@@ -429,13 +473,13 @@ export default function ProjectDetail() {
             // Check user role directly (more reliable than isClient which depends on client ID matching)
             const userIsClient = user?.role === 'Client';
             
-            // If user is a client, ONLY show if:
+            // If user is a client, show PDF if:
             // 1. Design is approved by admin (design.isApproved === true)
-            // 2. Request status is "Awaiting Client Review" (admin has approved and forwarded to client)
+            // 2. Design was approved (can view after admin approval, regardless of current status)
             if (userIsClient) {
               const isApproved = isDesignApproved === true && design.isApproved === true;
-              const isForwardedToClient = request?.status === 'Awaiting Client Review';
-              return isApproved && isForwardedToClient;
+              // Once approved, client can always view it (even after accepting/completing)
+              return isApproved;
             }
             
             // If user is NOT a client (designer, admin, installer), show if PDF exists
@@ -457,21 +501,38 @@ export default function ProjectDetail() {
                 {request.status === 'Completed' 
                   ? 'This project has been completed. You can review the final design report below.'
                   : isDesignApproved
-                  ? 'The admin has approved this design. Please review the design report below.'
+                  ? 'The admin has approved this design. Please review the design report below and accept it to proceed.'
                   : 'The design report is available for review.'}
               </p>
               
-              <a 
-                  href={pdfUrl}
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  View & Download Design Report
-              </a>
+              <div className="flex items-center space-x-3 flex-wrap gap-2">
+                <a 
+                    href={pdfUrl}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    View & Download Design Report
+                </a>
+                
+                {/* Accept Design Button - Show when design is approved and client hasn't accepted yet */}
+                {/* Show for clients when: design is approved AND status allows acceptance */}
+                {user?.role === 'Client' && isDesignApproved && design?.isApproved && 
+                 request?.status !== 'Completed' && request?.status !== 'Design Complete' && (
+                  <button
+                    onClick={() => setShowApproveModal(true)}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Send Approval Request to Admin
+                  </button>
+                )}
+              </div>
             </div>
           )}
           
@@ -514,20 +575,282 @@ export default function ProjectDetail() {
               {request.installationNotes && (
                 <div className="mt-3 pt-3 border-t border-indigo-200">
                   <p className="text-xs font-medium text-indigo-600 mb-1">Installation Notes:</p>
-                  <p className="text-sm text-indigo-700">{request.installationNotes}</p>
+                  <p className="text-sm text-indigo-700 whitespace-pre-line">{request.installationNotes}</p>
                 </div>
               )}
             </div>
           )}
 
           {/* Installation Notes - Show when available */}
-          {request.installationNotes && (
+          {request.installationNotes && !request.scheduledInstallationDate && (
             <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-4">
               <h4 className="text-md font-bold text-blue-800 mb-2">Installation Notes</h4>
-              <p className="text-sm text-blue-700">{request.installationNotes}</p>
+              <p className="text-sm text-blue-700 whitespace-pre-line">{request.installationNotes}</p>
+            </div>
+          )}
+
+          {/* Client Verification Section - Show when installation is completed */}
+          {/* Show for requests that have installation (Both Design and Installation, or Installation Only) */}
+          {/* Also check if installer was assigned, which indicates installation work was done */}
+          {user?.role === 'Client' && 
+           request?.status === 'Completed' && 
+           request?.assignedInstaller &&
+           (request?.requestType === 'Both Design and Installation' || 
+            request?.requestType === 'Installation Only' ||
+            (request?.installationProgress > 0 && request?.scheduledInstallationDate)) && (
+            <div className={`border-l-4 p-4 mt-6 ${request.clientVerified ? 'bg-green-50 border-green-400' : 'bg-yellow-50 border-yellow-400'}`}>
+              <h4 className={`text-md font-bold mb-2 ${request.clientVerified ? 'text-green-800' : 'text-yellow-800'}`}>
+                {request.clientVerified ? '✅ Installation Verified' : '⏳ Installation Verification Required'}
+              </h4>
+              {request.clientVerified ? (
+                <div>
+                  <p className="text-sm text-green-700 mb-2">
+                    You have verified that the installation has been completed successfully.
+                  </p>
+                  {request.clientVerificationDate && (
+                    <p className="text-xs text-green-600">
+                      Verified on: {new Date(request.clientVerificationDate).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  )}
+                  {request.clientVerificationNotes && (
+                    <div className="mt-2 pt-2 border-t border-green-200">
+                      <p className="text-xs font-medium text-green-600 mb-1">Your Verification Notes:</p>
+                      <p className="text-sm text-green-700">{request.clientVerificationNotes}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm text-yellow-700 mb-4">
+                    The installer has marked the installation as completed. Please verify that the installation work has been completed successfully and confirm below.
+                  </p>
+                  <button
+                    onClick={() => setShowVerifyModal(true)}
+                    className="btn-primary bg-green-600 hover:bg-green-700"
+                  >
+                    Verify Installation Completion
+                  </button>
+                </div>
+              )}
             </div>
           )}
           
+        </div>
+      </div>
+
+      {showVerifyModal && request && (
+        <VerifyInstallationModal
+          request={request}
+          onSuccess={() => {
+            setShowVerifyModal(false);
+            setRefreshToggle(p => !p);
+          }}
+          onClose={() => setShowVerifyModal(false)}
+        />
+      )}
+
+      {showApproveModal && request && (
+        <ApproveDesignModal
+          request={request}
+          design={design}
+          onSuccess={() => {
+            setShowApproveModal(false);
+            setRefreshToggle(p => !p);
+          }}
+          onClose={() => setShowApproveModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Approve Design Modal (Client)
+const ApproveDesignModal = ({ request, design, onClose, onSuccess }) => {
+  const [approvalNotes, setApprovalNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // Check if PDF exists
+      if (!design?.reportPdfUrl) {
+        toast.error('Cannot approve: PDF report is missing or did not load.');
+        setLoading(false);
+        return;
+      }
+
+      await requestsAPI.markClientComplete(request._id);
+      toast.success('Design approval request sent to admin successfully!');
+      onSuccess();
+      onClose();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to send approval request.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+        <div className="mt-3">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-medium text-gray-900">Send Design Approval Request to Admin</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+
+          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+            <p className="text-sm text-blue-700">
+              <strong>📋 Project:</strong> {request.requirements?.campusName || 'N/A'}
+            </p>
+            <p className="text-sm text-blue-700 mt-1">
+              <strong>📄 Design Report:</strong> {design?.reportPdfUrl ? 'Available' : 'Not Available'}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Approval Notes (Optional)
+              </label>
+              <textarea
+                value={approvalNotes}
+                onChange={(e) => setApprovalNotes(e.target.value)}
+                rows={4}
+                className="input-field"
+                placeholder="Add any comments or feedback about the design (optional)..."
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                You can add any comments or feedback about the approved design. This will be sent to the admin.
+              </p>
+            </div>
+
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
+              <p className="text-sm text-yellow-700">
+                <strong>Note:</strong> By submitting this approval, you confirm that you have reviewed the design report and approve it. The admin will be notified of your approval.
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !design?.reportPdfUrl}
+                className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Send Approval Request
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Verify Installation Modal (Client)
+const VerifyInstallationModal = ({ request, onClose, onSuccess }) => {
+  const [verificationNotes, setVerificationNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await requestsAPI.verifyInstallation(request._id, {
+        verificationNotes: verificationNotes.trim() || undefined
+      });
+      toast.success('Installation verified successfully! Admin has been notified.');
+      onSuccess();
+      onClose();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to verify installation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+        <div className="mt-3">
+          <h3 className="text-xl font-medium text-gray-900 mb-2">Verify Installation Completion</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Please confirm that the installation work has been completed successfully. Your verification will be sent to the admin.
+          </p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mb-4">
+              <p className="text-sm text-blue-700">
+                <strong>📋 Campus:</strong> {request.requirements?.campusName || 'N/A'}
+              </p>
+              {request.assignedInstaller && (
+                <p className="text-sm text-blue-700 mt-1">
+                  <strong>👷 Installer:</strong> {request.assignedInstaller.name || 'N/A'}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Verification Notes (Optional)
+              </label>
+              <textarea
+                value={verificationNotes}
+                onChange={(e) => setVerificationNotes(e.target.value)}
+                rows={4}
+                className="input-field"
+                placeholder="Add any notes about the installation completion, quality, or any observations..."
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Optional: Add any comments about the installation work quality or completion.
+              </p>
+            </div>
+
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
+              <p className="text-sm text-yellow-700">
+                <strong>Note:</strong> By verifying, you confirm that the installation has been completed successfully. 
+                The admin will be notified of your verification.
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button type="button" onClick={onClose} className="btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" disabled={loading} className="btn-primary bg-green-600 hover:bg-green-700">
+                {loading ? 'Verifying...' : 'Verify Installation'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
