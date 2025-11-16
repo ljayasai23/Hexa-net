@@ -12,6 +12,7 @@ const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 const Request = require('../models/Request');
 const User = require('../models/User');
+const LogicDesign = require('../models/LogicDesign');
 
 
 const Notification = require('../models/Notification');
@@ -1323,9 +1324,38 @@ router.put('/:id/complete-by-client', auth, async (req, res) => {
        return res.status(403).json({ message: 'Access denied. You are not the client for this request.' });
      }
       
-     // Check for the new status 'Awaiting Client Review'
-     if (request.status !== 'Awaiting Client Review') {
-       return res.status(400).json({ message: `Request status must be 'Awaiting Client Review' to be marked complete. Current status: ${request.status}` });
+     // Check if design exists and is approved
+     // Designs are stored in the request.design field (which is a LogicDesign reference)
+     // We need to check if the design exists and is approved
+     let design = null;
+     if (request.design) {
+       // If design is populated, use it directly
+       if (typeof request.design === 'object' && request.design.isApproved !== undefined) {
+         design = request.design;
+       } else {
+         // If design is just an ID, populate it
+         await request.populate('design');
+         design = request.design;
+       }
+     } else {
+       // Try to find design by request ID
+       design = await LogicDesign.findOne({ request: request._id });
+     }
+     
+     if (!design || !design.isApproved) {
+       return res.status(400).json({ message: 'Design must be approved by admin before client can accept it.' });
+     }
+     
+     // Allow client acceptance if design is approved, regardless of exact status
+     // (as long as it's not already completed)
+     const allowedStatuses = ['Awaiting Client Review', 'Design In Progress', 'Design Submitted', 'Assigned'];
+     if (!allowedStatuses.includes(request.status) && request.status !== 'Completed' && request.status !== 'Design Complete') {
+       return res.status(400).json({ message: `Request cannot be accepted in current status: ${request.status}. Design must be approved first.` });
+     }
+     
+     // If already completed or design complete, don't allow duplicate acceptance
+     if (request.status === 'Completed' || request.status === 'Design Complete') {
+       return res.status(400).json({ message: 'This request has already been accepted.' });
      }
   
      // Determine the correct status and progress based on request type

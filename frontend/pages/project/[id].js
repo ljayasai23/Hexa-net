@@ -689,8 +689,11 @@ const ApproveDesignModal = ({ request, design, onClose, onSuccess }) => {
 
       await requestsAPI.markClientComplete(request._id);
       toast.success('Design approval request sent to admin successfully!');
-      onSuccess();
       onClose();
+      // Wait a moment for the backend to process, then refresh
+      setTimeout(() => {
+        onSuccess();
+      }, 500);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to send approval request.');
     } finally {
